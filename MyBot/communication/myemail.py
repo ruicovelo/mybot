@@ -46,8 +46,9 @@ class MyIMAPEmail(object):
         if force_update:
             self.select_folder(self.folder)
         return self._messages.get_value()
-            
-
+    
+    def get_new_messages_count(self,force_update=False):
+        pass
     def __init__(self,log=None):
         if log:
             self.log = log
@@ -56,7 +57,6 @@ class MyIMAPEmail(object):
         self.log.debug('Created MyEmail instance')
         
     def select_folder(self,folder=None):
-        self.connection.debug = 4
         if folder:
             self.folder = folder
         else:
@@ -67,7 +67,27 @@ class MyIMAPEmail(object):
             return True
         else:
             return False
-            
+    
+    def listen(self):
+        '''
+        Listen current folder for changes
+        '''
+        #TODO: timeout?
+        # this thread hangs here waiting for change
+        status,response = self.connection.idle()
+        self.log.debug('Something changed:')
+        self.log.debug(status)
+        self.log.debug(response)
+        #TODO: what changed?
+            # new emails (unread or read coming from other mailboxes)
+            # email deletion / move / archive
+            # NOT: email read
+            # NOT: star
+        if status == 'OK':
+            return True
+        else:
+            return False
+        
         
     def connect(self,username,password,server_address=None,folder=None):
         if server_address:
