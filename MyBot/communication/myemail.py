@@ -2,10 +2,13 @@
 Created on Jul 31, 2013
 
 @author: pedro
+
+I created this for simple text messages and tested only with gmail yet. Don't expect much out of this.
 '''
 
 import logging
 import imaplib2
+import smtplib
 import time
 
 
@@ -27,10 +30,37 @@ class ValueUpdated(object):
     def get_value(self):
         return self._value
 
+
+
+
 class MyEmailMessage(object):
+    
+    fromaddr = None
+    toaddr = None
+    subject = None
+    body = None
     
     def __init__(self):
         pass
+    
+  
+    def send(self,username,password,server_address):
+        '''
+        Send a simple text message.
+        This wont work for more complicated stuff yet
+        Server address should be on the form ip:port
+        '''
+        server = smtplib.SMTP(server_address)
+        server.ehlo()
+        server.starttls()
+        server.login(username,password)
+        password = None
+        body = 'Subject: ' + self.subject + "\r\n" + self.body
+        server.sendmail(self.fromaddr,self.toaddr,body)
+        server.quit()
+
+  
+    
 
 class MyIMAPEmail(object):
     
