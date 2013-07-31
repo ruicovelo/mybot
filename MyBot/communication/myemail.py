@@ -10,6 +10,8 @@ import logging
 import imaplib2
 import smtplib
 import time
+import email
+import re
 
 
 class ValueUpdated(object):
@@ -72,19 +74,42 @@ class MyIMAPEmail(object):
     _new_messages = ValueUpdated()
     
     
+    def get_message_headers(self):
+        pass
+    
     def get_messages_count(self,force_update=False):
         if force_update:
-            self.select_folder(self.folder)
+            self.status()
+            
         return self._messages.get_value()
     
-    def get_new_messages_count(self,force_update=False):
-        pass
+    def get_new_messages_count(self,force_update=True):
+        if force_update:
+            self.status()
+        
+        return self._new_messages.get_value()
+    
+    
+    def status(self):
+        status,response = self.connection.status('INBOX','(MESSAGES UNSEEN)')
+        self.log.debug(status)
+        self.log.debug(response)
+        
+        if status == 'OK':
+            all_messages = int(re.findall("MESSAGES (\d)* ", response[0])[0])
+            unseen_messages = int(re.findall("UNSEEN (\d)*\)", response[0])[0])
+            self._messages.set_value(all_messages)
+            self._new_messages.set_value(unseen_messages)
+        else:
+            return None        
+    
     def __init__(self,log=None):
         if log:
             self.log = log
         else:
             self.log = logging
         self.log.debug('Created MyEmail instance')
+        
         
     def select_folder(self,folder=None):
         if folder:
