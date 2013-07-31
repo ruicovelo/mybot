@@ -19,6 +19,7 @@ class Voice:
     def __init__(self,debug=False):
         self.debug = debug
         #TODO: check availability of shell commands
+        # if platform is 'darwin' I'm using my conding laptop
         if sys.platform == 'darwin':
             self._shell_command='say'
         else: #TODO: check Linux
