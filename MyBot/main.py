@@ -6,11 +6,11 @@ Created on Jul 26, 2013
 from pickle import NONE
 
 print "Initializing bot..."
-from configuration import configuration
-import monitoring
+
 from communication import voice
 from communication import myemail
-import networking
+
+
 from glob import glob
 import re
 from os import path
@@ -18,7 +18,7 @@ import logging
 import cmd
 import imp
 from multiprocessing import Queue
-import botmodule
+
 from ConfigParser import ConfigParser
 from threading import Thread
 
