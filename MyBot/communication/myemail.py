@@ -33,8 +33,6 @@ class ValueUpdated(object):
         return self._value
 
 
-
-
 class MyEmailMessage(object):
     
     fromaddr = None
@@ -74,9 +72,6 @@ class MyIMAPEmail(object):
     _new_messages = ValueUpdated()
     
     
-    def get_message_headers(self):
-        pass
-    
     def get_messages_count(self,force_update=False):
         if force_update:
             self.status()
@@ -89,6 +84,51 @@ class MyIMAPEmail(object):
         
         return self._new_messages.get_value()
     
+    def get_message_ids(self):
+        '''
+        Returns list of str
+        '''
+        result,data=self.connection.uid('search',None,'ALL')
+        if result == 'OK':
+            return data[0].split()
+        
+    def get_new_message_ids(self):
+        '''
+        Returns list of str
+        '''
+        result,data=self.connection.uid('search',None,'UNSEEN')
+        if result == 'OK':
+            return data[0].split()
+     
+    def parse_header(self,header_data):
+        '''
+        For an unknown reason, I can't get HeaderParser to work properly
+        '''
+        result = {}
+        for line in header_data:
+            if ':' in line:
+                name,data = line.split(':',1)
+                result[name]=data
+        return result
+     
+    def get_message_headers(self,message_ids,mark_read=False):
+        self.log.debug(message_ids)
+        #response,data = self.connection.uid('FETCH', ','.join(map(str,message_ids)) , '(BODY.PEEK[HEADER.FIELDS (From Subject)] RFC822.SIZE)')
+        #print data
+        search = '(BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE)])'
+        if mark_read:
+            '(BODY[HEADER.FIELDS (SUBJECT FROM DATE)])'
+        response,data = self.connection.uid('FETCH', ','.join(map(str,message_ids)) , search)
+        
+        headers = {}
+        for item in data:
+            if len(item) > 1:
+                msg_id = int(re.findall("[0-9]+", re.findall("\(UID [0-9]+ ", item[0])[0])[0])
+                header_data = item[1].split('\r\n')
+                header_data = self.parse_header(header_data)
+                headers[msg_id]=header_data
+        if response == 'OK':
+            return headers 
     
     def status(self):
         status,response = self.connection.status('INBOX','(MESSAGES UNSEEN)')
@@ -129,7 +169,9 @@ class MyIMAPEmail(object):
         '''
         #TODO: timeout?
         # this thread hangs here waiting for change
+        self.log.debug('Waiting for changes...')
         status,response = self.connection.idle()
+        self.log.debug(self.connection.response('IDLE'))
         self.log.debug('Something changed:')
         self.log.debug(status)
         self.log.debug(response)
@@ -156,13 +198,13 @@ class MyIMAPEmail(object):
             if self.connection:
                 self.log.debug("Connection accepted")
                 try:
-                    result,data = self.connection.login(username,password)
+                    result = self.connection.login(username,password)
                 except imaplib2.IMAP4_SSL.error as e:
                     self.log.debug(str(e))
                     result = False
                 finally:
                     password = None
-                if result == 'OK':
+                if result[0] == 'OK':
                     self.log.debug("Login OK")
                     return self.select_folder(folder)
                 else:
