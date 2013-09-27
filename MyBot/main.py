@@ -1,4 +1,6 @@
 
+import socket
+import os
 from communication import voice
 from ConfigParser import ConfigParser
 
@@ -20,6 +22,11 @@ class MyBot(object):
     _loaded_modules=[]
     _runnable_modules={}
     _outputs = Queue()
+    
+    _IN_CON_SOCKET_PATH='input_console_socket'
+    _OUT_CON_SOCKET_PATH='output_console_socket'
+    _out_con_socket = None
+    _in_con_socket = None
     
 
     
@@ -129,15 +136,53 @@ class MyBot(object):
             
         
     def status(self):
-        print "Name: ", self.name
+        self.output_text("Name: %s" % self.name)
 
     def _receive_output(self):
         logging.debug('Receive thread starting...')
         while True:
             s = self._outputs.get(block=True, timeout=30)
-            print s
-            
-
+            self.output_text(s)
+    
+    def output_text(self,text):
+        ''' Handle the output of text directing it to the available outputs '''
+        print(text)
+        if self._out_con_socket:
+            self._out_con_socket.sendall(text)
+    
+    def _handle_console(self,in_con_socket):
+        ''' This should be run by a background thread to receive data from an external console '''
+        while True:
+            logging.debug('Waiting for console connection...')
+            conn,addr=in_con_socket.accept()
+            if not conn:
+                break
+            logging.debug('Connection received. Connecting for output...')
+            self._out_con_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
+            try:
+                self._out_con_socket.connect(self._OUT_CON_SOCKET_PATH)
+            except:
+                self._out_con_socket = None
+                logging.warning('Could not establish connection back to console!')
+            while True:
+                data = conn.recv(1024)
+                if not data:
+                    logging.debug('Console disconnected?')
+                    break
+                #TODO: replace with a handling console commands function
+                self.output_text(data)
+    
+    def wait_for_console_input(self):
+        self._in_con_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
+        try:
+            os.unlink(self._IN_CON_SOCKET_PATH)
+        except:
+            pass
+        self._in_con_socket.bind(self._IN_CON_SOCKET_PATH)
+        self._in_con_socket.listen(0)
+        self._console_receive_thread = Thread(target=self._handle_console,args=(self._in_con_socket,))
+        self._console_receive_thread.start()
+        
     def wait_for_output(self):
         self._receive_thread = Thread(target=self._receive_output)
         self._receive_thread.start()
@@ -149,7 +194,7 @@ class MyBot(object):
         return runnable_modules
 
     def stop_module(self,module_name):
-        print self._runnable_modules.keys()
+        print(self._runnable_modules.keys())
         loaded_module = self._runnable_modules[module_name]
         loaded_module.stop()
 
@@ -199,10 +244,13 @@ class MyBotShell(cmd.Cmd):
     
 logging.basicConfig(level=logging.DEBUG)
 logging.debug('Starting...')
+
+
 bot=MyBot()
 bot.wait_for_output()
+bot.wait_for_console_input()
 
-# lauching a basic shell
+# launching a basic shell
 shell=MyBotShell()
 shell.bot = bot
 
