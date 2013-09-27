@@ -1,8 +1,3 @@
-'''
-Created on Aug 2, 2013
-
-@author: pedro
-'''
 
 from time import sleep
 from multiprocessing import Process

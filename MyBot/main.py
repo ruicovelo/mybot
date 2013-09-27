@@ -1,15 +1,6 @@
-'''
-Created on Jul 26, 2013
-
-@author: pedro
-'''
-from pickle import NONE
-
-print "Initializing bot..."
 
 from communication import voice
-from communication import myemail
-
+from ConfigParser import ConfigParser
 
 from glob import glob
 import re
@@ -18,15 +9,10 @@ import logging
 import cmd
 import imp
 from multiprocessing import Queue
-
-from ConfigParser import ConfigParser
 from threading import Thread
 
 
 class MyBot(object):
-    '''
-    classdocs
-    '''
     name = "MyBot"
     _voice = voice.Voice()
     
@@ -48,11 +34,7 @@ class MyBot(object):
             if module_name_reg.match(filename):
                 modules_list.append(file_path)
         return modules_list
-        
-        
-    
-    
-    
+
     def load_modules(self):
         logging.debug('load_modules')
         available_modules_files = self.get_available_modules_files()
@@ -65,9 +47,6 @@ class MyBot(object):
             except Exception as e:
                 logging.error('Unable to load module!')
                 logging.error(str(type(e)) + e.message)
-
-
-
 
     def launch_module(self,loaded_module):
         config_parser = ConfigParser()
@@ -128,18 +107,12 @@ class MyBot(object):
             new_module.set_return_queue(self._outputs)
             self._runnable_modules[new_module.name]=new_module
             new_module.start()
-            
-        
-    
-    
-
 
     def say(self,text):
         #TODO: move this to a module
         if not self._voice.speak(text):
             print "Don't have voice?!"
   
-
     def __init__(self):
         '''
         Constructor
@@ -157,7 +130,6 @@ class MyBot(object):
         
     def status(self):
         print "Name: ", self.name
-
 
     def _receive_output(self):
         logging.debug('Receive thread starting...')
@@ -220,17 +192,20 @@ class MyBotShell(cmd.Cmd):
             logging.basicConfig(level=logging.DEBUG)
         
 
+
+
+
+
     
 logging.basicConfig(level=logging.DEBUG)
 logging.debug('Starting...')
 bot=MyBot()
 bot.wait_for_output()
 
-
+# lauching a basic shell
 shell=MyBotShell()
 shell.bot = bot
-bot.say("Waiting for your commands.")
 
 shell.cmdloop(" ")
 
-    
+
