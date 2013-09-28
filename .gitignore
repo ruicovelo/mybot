@@ -1,0 +1,10 @@
+#sockets
+*socket
+
+*.py[cod]
+
+# C extensions
+*.so
+
+.project
+.pydevproject
