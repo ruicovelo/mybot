@@ -1,4 +1,4 @@
-
+import sys
 import socket
 import os
 from communication import voice
@@ -22,6 +22,7 @@ class MyBot(object):
     _loaded_modules=[]
     _runnable_modules={}
     _outputs = Queue()
+    _commands = Queue()
     
     _IN_CON_SOCKET_PATH='input_console_socket'
     _OUT_CON_SOCKET_PATH='output_console_socket'
@@ -30,7 +31,7 @@ class MyBot(object):
     
     translator = None
 
-    
+    # COMMANDS
     
     def get_available_modules_files(self):
         modules_list = []
@@ -51,8 +52,13 @@ class MyBot(object):
 
     def list_modules(self):
         runnable_modules = self.get_runnable_modules()
+        self.output_text('Available modules:')
         for rm in runnable_modules:
-            self.output_text(rm)
+            if rm[1]:
+                status = 'Running'
+            else:
+                status = 'Stopped'
+            self.output_text("%s\t%s" % (rm[0],status))
             
     def load_modules(self):
         logging.debug('load_modules')
@@ -135,12 +141,16 @@ class MyBot(object):
         loaded_module.stop()
         return True
     
-
     def say(self,text):
         #TODO: move this to a module
         if not self._voice.speak(text):
             print("Don't have voice?!")
   
+    def status(self):
+        self.output_text("Name: %s" % self.name)
+  
+    # EO COMMANDS /
+    
     def __init__(self):
         '''
         Constructor
@@ -150,30 +160,35 @@ class MyBot(object):
 #             self.say("My name is " + self.name)
 #         else:
 #             self.say("Hmm... Don't know my name... Should you give me a name? That would be cool...")
-        logging.debug('Initializing MyBot')
+        logging.debug('Initializing MyBot...')
+        logging.debug('Loading commands...')
         self.translator = BotCommandTranslator()
+        self.translator.add_command("list", "list_modules()")
+        
         self.load_modules()
         for loaded_module in self._loaded_modules:
             self.launch_module(loaded_module)
             
         
-    def status(self):
-        self.output_text("Name: %s" % self.name)
-
-    def _receive_output(self):
-        logging.debug('Receive thread starting...')
-        while True:
-            s = self._outputs.get(block=True, timeout=30)
-            self.output_text(s)
-    
+                
     def output_text(self,text):
         ''' Handle the output of text directing it to the available outputs '''
-        print(text)
+        sys.stdout.write(text+"\n")
         if self._out_con_socket:
             self._out_con_socket.sendall(text)
     
+    def execute_command(self,command_line):
+        logging.debug('Translating command line %s' % command_line)
+        command = self.translator.get_command(command_line)
+        if command:
+            logging.debug('Executing command %s' % command)
+            exec("self."+command)
+        else:
+            self.output_text('Unknown command: %s' % command_line)
+    
     def _handle_console(self,in_con_socket):
         ''' This should be run by a background thread to receive data from an external console '''
+        #TODO: run by a thread? This is stupid...
         while True:
             logging.debug('Waiting for console connection...')
             conn,addr=in_con_socket.accept()
@@ -191,8 +206,7 @@ class MyBot(object):
                 if not data:
                     logging.debug('Console disconnected?')
                     break
-                #TODO: replace with a handling console commands function
-                self.output_text(data)
+                self._commands.put(data)
     
     def wait_for_console_input(self):
         self._in_con_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
@@ -204,13 +218,26 @@ class MyBot(object):
         self._in_con_socket.listen(0)
         self._console_receive_thread = Thread(target=self._handle_console,args=(self._in_con_socket,))
         self._console_receive_thread.start()
+    
+    def wait_commands(self):
+        self._receive_commands_thread = Thread(target=self._receive_from_queue,args=(self._commands,self.execute_command,))
+        self._receive_commands_thread.start()
         
     def wait_for_output(self):
-        self._receive_thread = Thread(target=self._receive_output)
+        self._receive_thread = Thread(target=self._receive_from_queue,args=(self._outputs,self.output_text,))
         self._receive_thread.start()
-        
-
-
+    
+    
+    
+    def _receive_from_queue(self,queue,processing_function):
+        while True:
+            try:
+                s = queue.get(block=True, timeout=5)
+                #TODO: add Empty exception
+            except:
+                continue
+            processing_function(s)
+            
         
 class MyBotShell(cmd.Cmd):
     prompt = "> "
@@ -253,6 +280,7 @@ logging.debug('Starting...')
 
 bot=MyBot()
 bot.wait_for_output()
+bot.wait_commands()
 bot.wait_for_console_input()
 
 # launching a basic shell

@@ -1,7 +1,4 @@
 
-import re
-
-
 
 class BotCommandTranslator(object):
     '''
