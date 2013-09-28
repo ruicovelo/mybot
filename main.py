@@ -131,7 +131,8 @@ class MyBot(object):
             exec('new_module = loaded_module.%s(name=new_module_name,parameters=configuration_values)' % (loaded_module.__name__))
             new_module.set_return_queue(self._outputs)
             self._runnable_modules[new_module.name]=new_module
-            new_module.start()
+            if configuration_values['Run'] == 'True':
+                new_module.start()
 
     def stop_module(self,module_name):
         if not self._runnable_modules.has_key(module_name):
