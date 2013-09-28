@@ -1,1 +1,0 @@
-print "Initializing configuration package..."
