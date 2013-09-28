@@ -12,7 +12,7 @@ import cmd
 import imp
 from multiprocessing import Queue
 from threading import Thread
-
+from commandtranslate import BotCommandTranslator
 
 class MyBot(object):
     name = "MyBot"
@@ -28,6 +28,7 @@ class MyBot(object):
     _out_con_socket = None
     _in_con_socket = None
     
+    translator = None
 
     
     
@@ -42,6 +43,17 @@ class MyBot(object):
                 modules_list.append(file_path)
         return modules_list
 
+    def get_runnable_modules(self):
+        runnable_modules = []
+        for runnable_module in self._runnable_modules.keys():
+            runnable_modules.append((runnable_module,self._runnable_modules[runnable_module].is_alive()))
+        return runnable_modules
+
+    def list_modules(self):
+        runnable_modules = self.get_runnable_modules()
+        for rm in runnable_modules:
+            self.output_text(rm)
+            
     def load_modules(self):
         logging.debug('load_modules')
         available_modules_files = self.get_available_modules_files()
@@ -115,10 +127,19 @@ class MyBot(object):
             self._runnable_modules[new_module.name]=new_module
             new_module.start()
 
+    def stop_module(self,module_name):
+        if not self._runnable_modules.has_key(module_name):
+            self.output_text('Module ''%s'' not found!' % module_name)
+            return False
+        loaded_module = self._runnable_modules[module_name]
+        loaded_module.stop()
+        return True
+    
+
     def say(self,text):
         #TODO: move this to a module
         if not self._voice.speak(text):
-            print "Don't have voice?!"
+            print("Don't have voice?!")
   
     def __init__(self):
         '''
@@ -130,6 +151,7 @@ class MyBot(object):
 #         else:
 #             self.say("Hmm... Don't know my name... Should you give me a name? That would be cool...")
         logging.debug('Initializing MyBot')
+        self.translator = BotCommandTranslator()
         self.load_modules()
         for loaded_module in self._loaded_modules:
             self.launch_module(loaded_module)
@@ -187,16 +209,7 @@ class MyBot(object):
         self._receive_thread = Thread(target=self._receive_output)
         self._receive_thread.start()
         
-    def get_runnable_modules(self):
-        runnable_modules = []
-        for runnable_module in self._runnable_modules.keys():
-            runnable_modules.append((runnable_module,self._runnable_modules[runnable_module].is_alive()))
-        return runnable_modules
 
-    def stop_module(self,module_name):
-        print(self._runnable_modules.keys())
-        loaded_module = self._runnable_modules[module_name]
-        loaded_module.stop()
 
         
 class MyBotShell(cmd.Cmd):
@@ -213,25 +226,17 @@ class MyBotShell(cmd.Cmd):
         return True
     
     def do_list(self,line):
-        runnable_modules = self.bot.get_runnable_modules()
-        print ""
-        for rm in runnable_modules:
-            print rm
+        #TODO: translate list command line
+        self.bot.list_modules()
     
     def do_stop(self,line):
-        line = line.lower()
-        runnable_modules=self.bot.get_runnable_modules()
-        for rm in runnable_modules:
-            if line in rm[0].lower() and rm[1]:
-                self.bot.stop_module(rm[0])
+        #TODO: translate stop command line
+        self.bot.stop_module(line)
                 
     def do_start(self,line):
-        line = line.lower()
-        runnable_modules=self.bot.get_runnable_modules()
-        for rm in runnable_modules:
-            if line in rm[0].lower() and rm[1]:
-                self.bot.start_module(rm[0])               
-
+        #TODO: translate start command line
+        self.bot.start_module(line)
+ 
     def do_debug(self,line):
         if not line:
             logging.basicConfig(level=logging.DEBUG)
