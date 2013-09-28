@@ -9,6 +9,7 @@ from glob import glob                   # file system walking
 from ConfigParser import ConfigParser   
 from multiprocessing import Queue
 from threading import Thread
+import mythreading
 
 
 # My modules
@@ -31,8 +32,41 @@ class MyBot(object):
     _in_con_socket = None
     
     translator = None
-
+    
+    _shuttingdown = False
+    
+    _THREAD_TIMEOUT_SECS = 5
+    _console_receive_thread = None
+    _receive_commands_thread = None
+    _receive_outputs_thread = None
+    
     # COMMANDS
+    
+    def shutdown(self):
+        self._shuttingdown = True
+        self.output_text('Shutting down...')
+        #TODO: send shutdown to all modules
+        #TODO: send shutdown to connected consoles ?
+        
+        for rm in self.get_runnable_modules():
+            self.stop_module(rm[0])
+        #TODO: join
+        
+        if self._console_receive_thread:
+            logging.debug('Closing console receive thread...')
+            self._console_receive_thread.join(self._THREAD_TIMEOUT_SECS)
+            logging.debug('Done')
+        if self._receive_commands_thread:
+            logging.debug('Closing receive commands thread')
+            self._receive_commands_thread.stop()
+            self._receive_commands_thread.join(self._THREAD_TIMEOUT_SECS)
+            logging.debug('Done')
+        if self._receive_outputs_thread:
+            logging.debug('Closing receive outputs thread')
+            self._receive_outputs_thread.stop()
+            self._receive_outputs_thread.join(self._THREAD_TIMEOUT_SECS)
+            logging.debug('Done')
+        
     
     def get_available_modules_files(self):
         modules_list = []
@@ -158,6 +192,12 @@ class MyBot(object):
         self.translator = BotCommandTranslator()
         self.translator.add_command("list", "list_modules()")
         
+        self._receive_commands_thread = mythreading.ReceiveThread(self.execute_command,self._commands)
+        self._receive_commands_thread.start()
+        
+        self._receive_outputs_thread = mythreading.ReceiveThread(self.output_text,self._outputs)
+        self._receive_outputs_thread.start()
+        
         # Loading modules
         self.load_modules()
         for loaded_module in self._loaded_modules:
@@ -213,24 +253,7 @@ class MyBot(object):
         self._console_receive_thread = Thread(target=self._handle_console,args=(self._in_con_socket,))
         self._console_receive_thread.start()
     
-    def wait_commands(self):
-        self._receive_commands_thread = Thread(target=self._receive_from_queue,args=(self._commands,self.execute_command,))
-        self._receive_commands_thread.start()
-        
-    def wait_for_output(self):
-        self._receive_thread = Thread(target=self._receive_from_queue,args=(self._outputs,self.output_text,))
-        self._receive_thread.start()
-    
-    
-    
-    def _receive_from_queue(self,queue,processing_function):
-        while True:
-            try:
-                s = queue.get(block=True, timeout=5)
-                #TODO: add Empty exception
-            except:
-                continue
-            processing_function(s)
+
             
         
 class MyBotShell(cmd.Cmd):
@@ -244,6 +267,7 @@ class MyBotShell(cmd.Cmd):
         bot.say(line)
     
     def do_quit(self,line):
+        bot.shutdown()
         return True
     
     def do_list(self,line):
@@ -273,8 +297,6 @@ logging.debug('Starting...')
 
 
 bot=MyBot()
-bot.wait_for_output()
-bot.wait_commands()
 bot.wait_for_console_input()
 
 # launching a basic shell
