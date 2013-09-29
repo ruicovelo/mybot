@@ -29,7 +29,8 @@ class SleeperModule(BotModule):
             random.seed()
         self.log.debug('Initialization complete.')
     
-    
+    def stop(self):
+        self.terminate()
          
     def run(self):
         # run until module is terminated
@@ -43,7 +44,7 @@ class SleeperModule(BotModule):
             sleep(seconds)
             command = self._get_command_available()
             if command:
-                print command
+                print(command)
                 
             
             

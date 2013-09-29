@@ -50,6 +50,7 @@ class BotModule(Process):
     #TODO: this is still very incomplete
     
     def __init__(self,name,parameters,log=None):
+        signal.signal(signal.SIGTERM,self._forced_stop)
         if log:
             self.log = log
         else:
@@ -65,12 +66,20 @@ class BotModule(Process):
     def start(self):
         self._run.value=True
         super(BotModule,self).start()
-        
-        
-    def stop(self):
-        self.log.debug('Stopping %s ' % self.name)
-        self._run.value=False
+      
+    def _forced_stop(self,signum,frame):
+        self.log.debug('Stop NOW %s ' % self.name)
+        sys.exit()  
     
+    def force_stop(self):
+        self.terminate()
+        
+    # Tell module to stop as soon as possible (module has to check the _run flag)
+    # This method should be overriden if the module can stop at any time with a SIGTERM signal
+    # In that case call force_stop instead.
+    def stop(self):
+        self.log.debug('Stopping %s ...' % self.name)
+        self._run.value=False
  
     def add_command(self,command,timeout=None):
         self._commands_queue.put(obj=command, block=True, timeout=timeout)
