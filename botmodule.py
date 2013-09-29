@@ -1,5 +1,7 @@
 
 from time import sleep
+
+
 from multiprocessing import Process
 
 # Exchanging objects between processes
@@ -11,6 +13,12 @@ from multiprocessing import Lock
 # Sharing state between processes
 from multiprocessing import Value
 from multiprocessing import Array
+
+
+# Controlling process execution
+import signal
+import sys
+
 
 import logging
 
@@ -103,4 +111,4 @@ class BotModule(object):
         return self._process.is_alive()
    
     def pid(self):
-        return self._process.pid()
+        return self._process.pid

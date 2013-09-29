@@ -1,5 +1,4 @@
 import sys
-import socket
 import os
 import re
 import logging
@@ -25,17 +24,13 @@ class MyBot(object):
     _runnable_modules={}
     _outputs = Queue()
     _commands = Queue()
-    
-    _IN_CON_SOCKET_PATH='input_console_socket'
-    _OUT_CON_SOCKET_PATH='output_console_socket'
-    _out_con_socket = None
-    _in_con_socket = None
+
     
     translator = None
     
     _shuttingdown = False
     
-    _THREAD_TIMEOUT_SECS = 5
+    _THREAD_TIMEOUT_SECS = 5.0
     _console_receive_thread = None
     _receive_commands_thread = None
     _receive_outputs_thread = None
@@ -45,29 +40,40 @@ class MyBot(object):
     def shutdown(self):
         self._shuttingdown = True
         self.output_text('Shutting down...')
-        #TODO: send shutdown to all modules
         #TODO: send shutdown to connected consoles ?
         
+        # Shutting down modules
         for rm in self.get_runnable_modules():
             self.stop_module(rm[0])
         #TODO: join
         
         if self._console_receive_thread:
             logging.debug('Closing console receive thread...')
-            self._console_receive_thread.join(self._THREAD_TIMEOUT_SECS)
-            logging.debug('Done')
+            self._console_receive_thread.stop()
+
         if self._receive_commands_thread:
             logging.debug('Closing receive commands thread')
             self._receive_commands_thread.stop()
-            self._receive_commands_thread.join(self._THREAD_TIMEOUT_SECS)
-            logging.debug('Done')
+ 
         if self._receive_outputs_thread:
             logging.debug('Closing receive outputs thread')
             self._receive_outputs_thread.stop()
-            self._receive_outputs_thread.join(self._THREAD_TIMEOUT_SECS)
-            logging.debug('Done')
+ 
+ 
+        self._console_receive_thread.join(15.0)
+        self._receive_outputs_thread.join(self._THREAD_TIMEOUT_SECS)
+        self._receive_commands_thread.join(self._THREAD_TIMEOUT_SECS)   
+ 
+        #TODO: not sure if this is necessary
+        if self._receive_outputs_thread.is_alive():
+            logging.error('Receive outputs thread is taking too long to close...')
+   
+        if self._receive_commands_thread.is_alive():
+            logging.error('Receive commands thread is taking too long to close...')
         
-    
+        if self._console_receive_thread.is_alive():
+            logging.error('Receive consoles thread is taking too long to close...') 
+            
     def get_available_modules_files(self):
         modules_list = []
         all_files = glob(self._MODULE_PATH+"/*.py")
@@ -192,10 +198,10 @@ class MyBot(object):
         self.translator = BotCommandTranslator()
         self.translator.add_command("list", "list_modules()")
         
-        self._receive_commands_thread = mythreading.ReceiveThread(self.execute_command,self._commands)
+        self._receive_commands_thread = mythreading.ReceiveQueueThread(self.execute_command,self._commands)
         self._receive_commands_thread.start()
         
-        self._receive_outputs_thread = mythreading.ReceiveThread(self.output_text,self._outputs)
+        self._receive_outputs_thread = mythreading.ReceiveQueueThread(self.output_text,self._outputs)
         self._receive_outputs_thread.start()
         
         # Loading modules
@@ -208,8 +214,10 @@ class MyBot(object):
     def output_text(self,text):
         ''' Handle the output of text directing it to the available outputs '''
         sys.stdout.write(text+"\n")
-        if self._out_con_socket:
-            self._out_con_socket.sendall(text)
+        if self._console_receive_thread:
+            if self._console_receive_thread.is_alive():
+                self._console_receive_thread.output_text(text) 
+               
     
     def execute_command(self,command_line):
         logging.debug('Translating command line %s' % command_line)
@@ -220,37 +228,9 @@ class MyBot(object):
         else:
             self.output_text('Unknown command: %s' % command_line)
     
-    def _handle_console(self,in_con_socket):
-        ''' This should be run by a background thread to receive data from an external console '''
-        #TODO: run by a thread? This is stupid...
-        while True:
-            logging.debug('Waiting for console connection...')
-            conn,addr=in_con_socket.accept()
-            if not conn:
-                break
-            logging.debug('Connection received. Connecting for output...')
-            self._out_con_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
-            try:
-                self._out_con_socket.connect(self._OUT_CON_SOCKET_PATH)
-            except:
-                self._out_con_socket = None
-                logging.warning('Could not establish connection back to console!')
-            while True:
-                data = conn.recv(1024)
-                if not data:
-                    logging.debug('Console disconnected?')
-                    break
-                self._commands.put(data)
     
     def wait_for_console_input(self):
-        self._in_con_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
-        try:
-            os.unlink(self._IN_CON_SOCKET_PATH)
-        except:
-            pass
-        self._in_con_socket.bind(self._IN_CON_SOCKET_PATH)
-        self._in_con_socket.listen(0)
-        self._console_receive_thread = Thread(target=self._handle_console,args=(self._in_con_socket,))
+        self._console_receive_thread = mythreading.ReceiveSocketThread(None,self._commands)
         self._console_receive_thread.start()
     
 
