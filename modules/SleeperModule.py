@@ -18,7 +18,6 @@ class SleeperModule(BotModule):
     _default_args = {'seconds':5,'randomize':False}
     
     def __init__(self,name='sleeper',parameters={},log=None):
-        self._target = self._sleep
         super(SleeperModule,self).__init__(name=name,parameters=parameters,log=log)
         for arg in self._default_args:
             if not self.parameters.has_key(arg):
@@ -32,9 +31,7 @@ class SleeperModule(BotModule):
     
     
          
-    def _sleep(self):
-
-        
+    def run(self):
         # run until module is terminated
         while self._run.value:
             if self._randomize:

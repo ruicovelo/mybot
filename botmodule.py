@@ -22,7 +22,7 @@ import sys
 
 import logging
 
-class BotModule(object):
+class BotModule(Process):
     '''
     This should be inherited
     TODO: force this?
@@ -31,9 +31,6 @@ class BotModule(object):
     Multitasking within the module should be done with threads.
     '''
     
-    # this is the process that runs the code of the module
-    _process = None
-    _target = None
     parameters = None
     name = None
     
@@ -50,7 +47,7 @@ class BotModule(object):
 
 
 
-    #TODO: this is still very uncomplete
+    #TODO: this is still very incomplete
     
     def __init__(self,name,parameters,log=None):
         if log:
@@ -62,20 +59,18 @@ class BotModule(object):
         self._run = Value('b',True,lock=False)
         self._commands_queue = Queue()    
         self.log.debug('Module named "%s" initiating...' % self.name)
-        self._process=Process(target=self._target)
+        super(BotModule,self).__init__()
         
            
     def start(self):
         self._run.value=True
-        self._process.start()
+        super(BotModule,self).start()
         
         
     def stop(self):
         self.log.debug('Stopping %s ' % self.name)
         self._run.value=False
     
-    def join(self):
-        self._process.join(timeout=None)   
  
     def add_command(self,command,timeout=None):
         self._commands_queue.put(obj=command, block=True, timeout=timeout)
@@ -107,8 +102,3 @@ class BotModule(object):
         except AttributeError:
             return s    
    
-    def is_alive(self):
-        return self._process.is_alive()
-   
-    def pid(self):
-        return self._process.pid
