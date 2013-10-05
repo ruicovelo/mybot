@@ -9,8 +9,8 @@ from asyncconsole import AsyncConsole
 
 
 
-IN_CON_SOCKET_PATH = 'input_console_socket'
-OUT_CON_SOCKET_PATH = 'output_console_socket'
+IN_CON_SOCKET_PATH = 'in_console_socket'
+OUT_CON_SOCKET_PATH = 'out_console_socket'
 
 
 def handle_received_output(s,console):

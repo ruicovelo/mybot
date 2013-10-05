@@ -80,6 +80,8 @@ class BotModule(Process):
     def stop(self):
         self.log.debug('Stopping %s ...' % self.name)
         self._run.value=False
+    def stopping(self):
+        return self._run.value
  
     def add_command(self,command,timeout=None):
         self._commands_queue.put(obj=command, block=True, timeout=timeout)

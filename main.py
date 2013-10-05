@@ -1,6 +1,6 @@
-import sys
 import os
 import re
+import sys
 import logging
 import cmd  #TODO: lose this
 import imp                              # loading modules
@@ -31,7 +31,6 @@ class MyBot(object):
     _shuttingdown = False
     
     _THREAD_TIMEOUT_SECS = 5.0
-    _console_receive_thread = None
     _receive_commands_thread = None
     _receive_outputs_thread = None
     
@@ -40,17 +39,12 @@ class MyBot(object):
     def shutdown(self):
         self._shuttingdown = True
         self.output_text('Shutting down...')
-        #TODO: send shutdown to connected consoles ?
         
         # Shutting down modules
         for rm in self.get_runnable_modules():
             self.stop_module(rm[0])
         #TODO: join
         
-        if self._console_receive_thread:
-            logging.debug('Closing console receive thread...')
-            self._console_receive_thread.stop()
-
         if self._receive_commands_thread:
             logging.debug('Closing receive commands thread')
             self._receive_commands_thread.stop()
@@ -59,8 +53,6 @@ class MyBot(object):
             logging.debug('Closing receive outputs thread')
             self._receive_outputs_thread.stop()
  
- 
-        self._console_receive_thread.join(15.0)
         self._receive_outputs_thread.join(self._THREAD_TIMEOUT_SECS)
         self._receive_commands_thread.join(self._THREAD_TIMEOUT_SECS)   
  
@@ -71,9 +63,6 @@ class MyBot(object):
         if self._receive_commands_thread.is_alive():
             logging.error('Receive commands thread is taking too long to close...')
         
-        if self._console_receive_thread.is_alive():
-            logging.error('Receive consoles thread is taking too long to close...') 
-            
     def get_available_modules_files(self):
         modules_list = []
         all_files = glob(self._MODULE_PATH+"/*.py")
@@ -173,13 +162,21 @@ class MyBot(object):
             if configuration_values['Run'] == 'True':
                 new_module.start()
 
+    def _get_module(self,module_name):
+        if self._runnable_modules.has_key(module_name):
+            return self._runnable_modules[module_name]
+        return False
+
+    def start_module(self,module_name):
+        loaded_module = self._get_module(module_name)
+        if loaded_module:
+            loaded_module.start()
+            
     def stop_module(self,module_name):
-        if not self._runnable_modules.has_key(module_name):
-            self.output_text('Module ''%s'' not found!' % module_name)
-            return False
-        loaded_module = self._runnable_modules[module_name]
-        loaded_module.stop()
-        return True
+        loaded_module = self._get_module(module_name)
+        if loaded_module:
+            loaded_module = self._runnable_modules[module_name]
+            loaded_module.stop()
     
     def say(self,text):
         #TODO: move this to a module
@@ -208,16 +205,10 @@ class MyBot(object):
         self.load_modules()
         for loaded_module in self._loaded_modules:
             self.launch_module(loaded_module)
-            
-        
                 
     def output_text(self,text):
         ''' Handle the output of text directing it to the available outputs '''
         sys.stdout.write(text+"\n")
-        if self._console_receive_thread:
-            if self._console_receive_thread.is_alive():
-                self._console_receive_thread.output_text(text) 
-               
     
     def execute_command(self,command_line):
         logging.debug('Translating command line %s' % command_line)
@@ -227,12 +218,7 @@ class MyBot(object):
             exec("self."+command)
         else:
             self.output_text('Unknown command: %s' % command_line)
-    
-    
-    def wait_for_console_input(self):
-        self._console_receive_thread = mythreading.ReceiveSocketThread(None,self._commands)
-        self._console_receive_thread.start()
-    
+       
 
             
         
@@ -277,7 +263,6 @@ logging.debug('Starting...')
 
 
 bot=MyBot()
-bot.wait_for_console_input()
 
 # launching a basic shell
 shell=MyBotShell()
