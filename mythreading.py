@@ -43,8 +43,6 @@ class ReceiveSocketThread(MyThread):
         self._connection = connection
             
     def run(self):
-        ''' queue should be set as an output queue '''
-        
         #TODO: set connection timeout ?
         while not self.stopping():
             data = self._connection.recv(1024)
