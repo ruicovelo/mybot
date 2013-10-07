@@ -14,6 +14,8 @@ from multiprocessing import Lock
 from multiprocessing import Value
 from multiprocessing import Array
 
+from threading import Thread
+
 
 # Controlling process execution
 import signal
@@ -31,30 +33,26 @@ class BotModule(Process):
     Multitasking within the module should be done with threads.
     '''
     
-    parameters = None
+    parameters = None               # configured startup parameters
     name = None
     
-    # set to False to module stop as soon as it checks this value
-    _run = None
-    _commands_queue = None    
-    _return_queue = None    
+    _run = None                     # set to False to stop module as soon as it checks this value (self._stopping())
+    _commands_queue = None          # queue for receiving async commands from controller    
+    _commands_output_queue = None   # queue for sending commands to controller
+    _output_text_queue = Queue()    # queue for receiving text from controller
+    _output_queue = None            # queue to output data to controller
+    _receive_output_text = False
     
-    _commands={}
+    # for background working while main thread receives commands i.e.
+    _work_thread = None
 
-    #TODO: still not know what I will do with this
-    _siblings={}
-    _introduce_queue = Queue()
-
-
-
-    #TODO: this is still very incomplete
-    
     def __init__(self,name,parameters,log=None):
         signal.signal(signal.SIGTERM,self._forced_stop)
         if log:
             self.log = log
         else:
             self.log = logging
+            
         self.name = name
         self.parameters=parameters
         self._run = Value('b',True,lock=False)
@@ -62,13 +60,18 @@ class BotModule(Process):
         self.log.debug('Module named "%s" initiating...' % self.name)
         super(BotModule,self).__init__()
         
+    def _do_work(self):
+        self.log.debug('Not doing the right work...')
+        pass
            
     def start(self):
         self._run.value=True
+        #TODO: change Thread to MyThread (stoppable thread)
+        self._work_thread = Thread(target=self._do_work)
         super(BotModule,self).start()
       
     def _forced_stop(self,signum,frame):
-        self.log.debug('Stop NOW %s ' % self.name)
+        self.log.debug('Stopping NOW %s ' % self.name)
         sys.exit()  
     
     def force_stop(self):
@@ -80,8 +83,9 @@ class BotModule(Process):
     def stop(self):
         self.log.debug('Stopping %s ...' % self.name)
         self._run.value=False
+        
     def stopping(self):
-        return self._run.value
+        return not self._run.value
  
     def add_command(self,command,timeout=None):
         self._commands_queue.put(obj=command, block=True, timeout=timeout)
@@ -95,12 +99,28 @@ class BotModule(Process):
     def _wait_next_command_available(self,timeout=None):
         return self._commands_queue.get(True, timeout)
         
-    def set_return_queue(self,q):
-        self._return_queue = q
+    def set_output_queue(self,q):
+        self._output_queue = q
         
+    def check_outputs_subscriber(self,l):
+        if self._receive_output_text:
+            l.append(self._output_text_queue)
+
+    def set_commands_queue(self,q):
+        self._commands_queue = q
+
+    def set_output_commands_queue(self,q):
+        self._output_commands_queue = q
+        
+    def output_command(self,command_line):
+        if self._output_commands_queue:
+            self._output_commands_queue.put(command_line)
+            return True
+        return False
+    
     def output(self,obj):
-        if self._return_queue:
-            self._return_queue.put(obj)
+        if self._output_queue:
+            self._output_queue.put(obj)
             return True
         return False
 

@@ -24,6 +24,7 @@ class MyBot(object):
     _runnable_modules={}
     _outputs = Queue()
     _commands = Queue()
+    _outputs_subscribers = []
 
     
     translator = None
@@ -31,8 +32,8 @@ class MyBot(object):
     _shuttingdown = False
     
     _THREAD_TIMEOUT_SECS = 5.0
-    _receive_commands_thread = None
-    _receive_outputs_thread = None
+    _receive_commands_thread = None     # waits for commands from running modules
+    _receive_outputs_thread = None      # waits for outputs from running modules
     
     # COMMANDS
     
@@ -45,7 +46,6 @@ class MyBot(object):
             self.stop_module(rm[0])
         #TODO: join
         
-        if self._receive_commands_thread:
             logging.debug('Closing receive commands thread')
             self._receive_commands_thread.stop()
  
@@ -155,9 +155,11 @@ class MyBot(object):
             while self._runnable_modules.has_key(new_module_name):
                 new_module_name = loaded_module.__name__ + str(n)
                 n = n + 1
-                
+             
             exec('new_module = loaded_module.%s(name=new_module_name,parameters=configuration_values)' % (loaded_module.__name__))
-            new_module.set_return_queue(self._outputs)
+            new_module.set_output_queue(self._outputs)
+            new_module.check_outputs_subscriber(self._outputs_subscribers)
+            new_module.set_output_commands_queue(self._commands)
             self._runnable_modules[new_module.name]=new_module
             if configuration_values['Run'] == 'True':
                 new_module.start()
@@ -209,6 +211,9 @@ class MyBot(object):
     def output_text(self,text):
         ''' Handle the output of text directing it to the available outputs '''
         sys.stdout.write(text+"\n")
+        for o in self._outputs_subscribers:
+            logging.debug('Sending output to queue')
+            o.put(text)
     
     def execute_command(self,command_line):
         logging.debug('Translating command line %s' % command_line)
@@ -260,6 +265,8 @@ class MyBotShell(cmd.Cmd):
     
 logging.basicConfig(level=logging.DEBUG)
 logging.debug('Starting...')
+
+
 
 
 bot=MyBot()
