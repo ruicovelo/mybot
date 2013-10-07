@@ -20,8 +20,8 @@ class MyBot(object):
     _voice = voice.Voice()
     
     _MODULE_PATH='modules/'
-    _loaded_modules=[]
-    _runnable_modules={}
+    _loaded_modules=[]		# modules available in modules directory
+    _runnable_modules={}	# module objects that can be started
     _outputs = Queue()
     _commands = Queue()
     _outputs_subscribers = []
@@ -35,6 +35,26 @@ class MyBot(object):
     _receive_commands_thread = None     # waits for commands from running modules
     _receive_outputs_thread = None      # waits for outputs from running modules
     
+    def __init__(self):
+        logging.debug('Initializing MyBot...')
+        
+        # Loading acceptable commands
+        self.translator = BotCommandTranslator()
+        self.translator.add_command("list", "list_modules()")
+        
+	# Starting the thread that will receive commands in the background set from modules
+        self._receive_commands_thread = mythreading.ReceiveQueueThread(self.execute_command,self._commands)
+        self._receive_commands_thread.start()
+        
+	# Starting the thread that will receive text to process (display/save/send)
+        self._receive_outputs_thread = mythreading.ReceiveQueueThread(self.output_text,self._outputs)
+        self._receive_outputs_thread.start()
+        
+        # Loading modules
+        self.load_modules()
+        for loaded_module in self._loaded_modules:
+            self.launch_module(loaded_module)
+
     # COMMANDS
     
     def shutdown(self):
@@ -64,6 +84,9 @@ class MyBot(object):
             logging.error('Receive commands thread is taking too long to close...')
         
     def get_available_modules_files(self):
+	'''
+	Search the modules path for files to import as modules
+	'''
         modules_list = []
         all_files = glob(self._MODULE_PATH+"/*.py")
         logging.debug(all_files)
@@ -91,6 +114,11 @@ class MyBot(object):
             self.output_text("%s\t%s" % (rm[0],status))
             
     def load_modules(self):
+	'''
+	Import modules class definitions and code. Does not expect to run any code in the module.
+	The modules are appended to self._loaded_modules
+	'''
+	#TODO: make sure we are not running any code in the module (code not inside classes)
         logging.debug('load_modules')
         available_modules_files = self.get_available_modules_files()
         for file_path in available_modules_files:
@@ -104,11 +132,15 @@ class MyBot(object):
                 logging.error(str(type(e)) + e.message)
 
     def launch_module(self,loaded_module):
+	'''
+	Loads configuration parameters from loaded_module configuration file, applies to loaded_modules and runs it.
+	'''
         config_parser = ConfigParser()
         config_file_path = os.path.join(self._MODULE_PATH+loaded_module.__name__+'.cfg')
         initialization_values = {}
-        self._configuration_defaults={'Instances': 1,'Run': True}
 
+	# by default, we will only run one instance of each module
+        self._configuration_defaults={'Instances': 1,'Run': True}
         
         logging.debug("Loading configuration file %s ..." % config_file_path)
         config_parser.read(config_file_path)
@@ -124,7 +156,8 @@ class MyBot(object):
                 config_parser.set('Initialization', default, self._configuration_defaults[default])
         
         config_parser.write(open(config_file_path,"w"))
-        
+
+        # applyng configuration values to each instance of the module
         for i in range(1,int(initialization_values['Instances'])+1):
             configuration_values = {}
             
@@ -190,23 +223,6 @@ class MyBot(object):
   
     # EO COMMANDS /
     
-    def __init__(self):
-        logging.debug('Initializing MyBot...')
-        
-        # Loading acceptable commands
-        self.translator = BotCommandTranslator()
-        self.translator.add_command("list", "list_modules()")
-        
-        self._receive_commands_thread = mythreading.ReceiveQueueThread(self.execute_command,self._commands)
-        self._receive_commands_thread.start()
-        
-        self._receive_outputs_thread = mythreading.ReceiveQueueThread(self.output_text,self._outputs)
-        self._receive_outputs_thread.start()
-        
-        # Loading modules
-        self.load_modules()
-        for loaded_module in self._loaded_modules:
-            self.launch_module(loaded_module)
                 
     def output_text(self,text):
         ''' Handle the output of text directing it to the available outputs '''
