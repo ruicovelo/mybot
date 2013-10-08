@@ -41,7 +41,7 @@ class BotModule(Process):
     _commands_output_queue = None   # queue for sending commands to controller
     _output_text_queue = Queue()    # queue for receiving text from controller
     _output_queue = None            # queue to output data to controller
-    _receive_output_text = False
+    _receive_output_text = False    # set to True to subscribe to receive text output to stdout
     
     # for background working while main thread receives commands i.e.
     _work_thread = None

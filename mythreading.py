@@ -3,10 +3,11 @@ from threading import Event
 from multiprocessing import Queue
 from Queue import Empty
 import socket
+import logging
 
 class MyThread(Thread):  
     
-    _STOP_TIMEOUT_SECS=3
+    STOP_TIMEOUT_SECS=3.0
     _processing_function = None
     _queue = None
     
@@ -30,11 +31,11 @@ class ReceiveQueueThread(MyThread):
     def run(self):
         while not self.stopping():
             try:
-                s = self._queue.get(block=True, timeout=self._STOP_TIMEOUT_SECS)
+                s = self._queue.get(block=True, timeout=self.STOP_TIMEOUT_SECS)
             except Empty:
                 continue
             if not self.stopping():
-                self._processing_function(s)   
+                self._processing_function(s)
 
 class ReceiveSocketThread(MyThread):
 

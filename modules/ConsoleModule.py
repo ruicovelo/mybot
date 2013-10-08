@@ -1,15 +1,18 @@
 from botmodule import BotModule
-from multiprocessing import Queue
 from Queue import Empty
 from os import unlink
 import socket
 from mythreading import ReceiveSocketThread
 from mythreading import ReceiveQueueThread
-
+import sys
 
 class ConsoleModule(BotModule):
     
     _default_args = {'in_socket_path':'in_console_socket','out_socket_path':'out_console_socket'}
+    _receive_client_thread = None
+    _receive_controller_thread = None
+    in_socket = None
+    out_socket = None
 
     def __init__(self,name='console',parameters={},log=None):
         super(ConsoleModule,self).__init__(name=name,parameters=parameters,log=log)
@@ -20,14 +23,35 @@ class ConsoleModule(BotModule):
  
     def stop(self):
         super(ConsoleModule,self).stop()
+        # stopping gently
+        if self._receive_client_thread and self._receive_client_thread.is_alive():
+            self._receive_client_thread.stop()
+        if self._receive_controller_thread and self._receive_controller_thread.is_alive():
+            self._receive_controller_thread.stop()
+        if self._receive_client_thread:
+            self._receive_client_thread.join(self._receive_client_thread.STOP_TIMEOUT_SECS)
+            if self._receive_client_thread.is_alive():
+                self.log.error('_receive_client_thread taking too long to close!')
+        if self._receive_controller_thread:
+            self._receive_controller_thread.join(self._receive_controller_thread.STOP_TIMEOUT_SECS)
+            if self._receive_controller_thread:
+                self.log.error('_receive_controller_thread taking too long to close!')
+        # stopping not so gently
         self.terminate()
     
+    def _forced_stop(self,signum,frame):
+        #TODO: send client goodbye?
+        if self.in_socket:
+            self.in_socket.close()
+        if self.out_socket:
+            self.out_socket.close()
+        sys.exit()
+    
     def _process_client_data(self,data):
-        self.output_command(data)
+        self.output_command(data)               # send command line received from client to controller
 
     def _process_controller_data(self,data):
-        self.log.debug('Processing controller data')
-        self.out_socket.sendall(data)
+        self.out_socket.sendall(data)           # send to client data sent by controller
         
     def run(self):
         self.in_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
@@ -35,7 +59,7 @@ class ConsoleModule(BotModule):
             unlink(self.parameters['in_socket_path'])
         except:
             pass
-
+        self.log.debug('Creating socket %s ' % self.parameters['in_socket_path'])
         self.in_socket.bind(self.parameters['in_socket_path'])
         self.in_socket.listen(0)
         self.log.debug('Waiting for connection...')
@@ -56,6 +80,7 @@ class ConsoleModule(BotModule):
         
         
         self._receive_client_thread = ReceiveSocketThread(processing_function=self._process_client_data,connection=self._conn)
+        self._receive_client_thread.name='receive_client_thread'
         self._receive_controller_thread = ReceiveQueueThread(processing_function=self._process_controller_data,queue=self._output_text_queue)
         self._receive_client_thread.start()
         self._receive_controller_thread.start()
@@ -76,6 +101,3 @@ class ConsoleModule(BotModule):
         except:
             pass
         
-        
-if __name__ == '__main__':
-    b = ConsoleModule()
