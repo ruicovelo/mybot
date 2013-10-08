@@ -65,11 +65,9 @@ class MyBot(object):
             self.stop_module(rm[0])
         #TODO: join
         
-            logging.debug('Closing receive commands thread')
-            self._receive_commands_thread.stop()
+        self._receive_commands_thread.stop()
  
         if self._receive_outputs_thread:
-            logging.debug('Closing receive outputs thread')
             self._receive_outputs_thread.stop()
  
         self._receive_outputs_thread.join(self._THREAD_TIMEOUT_SECS)
@@ -210,7 +208,8 @@ class MyBot(object):
         loaded_module = self._get_module(module_name)
         if loaded_module:
             loaded_module = self._runnable_modules[module_name]
-            loaded_module.stop()
+            if loaded_module.is_alive():
+                loaded_module.stop()
     
     def say(self,text):
         #TODO: move this to a module
