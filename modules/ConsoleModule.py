@@ -59,42 +59,47 @@ class ConsoleModule(BotModule):
             unlink(self.parameters['in_socket_path'])
         except:
             pass
-        self.log.debug('Creating socket %s ' % self.parameters['in_socket_path'])
         self.in_socket.bind(self.parameters['in_socket_path'])
         self.in_socket.listen(0)
-        self.log.debug('Waiting for connection...')
-        self._conn,addr=self.in_socket.accept()
-        if not self._conn or self.stopping():
-            self.log.debug('Terminating')
-            self.log.debug(str(self.stopping()))
-            return
-        self.log.debug('Connection accepted.')
-        self.log.debug('Connecting back to client...')
-        self.out_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
-        try:
-            self.out_socket.connect(self.parameters['out_socket_path'])
-        except:
-            self.log.error('Could not connect back to client')
-            #TODO: terminate main connection and return to listening for new connections
-            self.out_socket = None
-        
-        
-        self._receive_client_thread = ReceiveSocketThread(processing_function=self._process_client_data,connection=self._conn)
-        self._receive_client_thread.name='receive_client_thread'
-        self._receive_controller_thread = ReceiveQueueThread(processing_function=self._process_controller_data,queue=self._output_text_queue)
-        self._receive_client_thread.start()
-        self._receive_controller_thread.start()
-        
-        while not self.stopping():
-            try:
-                s = self._commands_queue.get(block=True, timeout=5)
-                self.log.debug(s)
-            except Empty:
-                continue
-            if not self.stopping():
-                self.out_socket.sendall(s)   
 
-        self.out_socket = None
+        while not self.stopping():
+            self.log.debug('Waiting for connection...')
+            self._conn,addr=self.in_socket.accept()
+            if not self._conn or self.stopping():
+                self.log.debug('Terminating')
+                self.log.debug(str(self.stopping()))
+                return
+            self.log.debug('Connection accepted.')
+            self.log.debug('Connecting back to client...')
+            self.out_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
+            try:
+                self.out_socket.connect(self.parameters['out_socket_path'])
+            except:
+                self.log.error('Could not connect back to client')
+                #TODO: terminate main connection and return to listening for new connections
+                self.out_socket = None
+            
+            
+            self._receive_client_thread = ReceiveSocketThread(processing_function=self._process_client_data,connection=self._conn)
+            self._receive_controller_thread = ReceiveQueueThread(processing_function=self._process_controller_data,queue=self._output_text_queue)
+            self._receive_client_thread.start()
+            self._receive_controller_thread.start()
+            
+            while not self.stopping() and self._receive_client_thread.is_alive():
+                try:
+                    s = self._commands_queue.get(block=True, timeout=5)
+                    self.log.debug(s)
+                except Empty:
+                    continue
+                if not self.stopping():
+                    self.out_socket.sendall(s)
+            if not self._receive_client_thread.is_alive():
+                self.log.debug('Client disconnected...')
+                
+            self._receive_controller_thread.stop()
+            self._receive_controller_thread.join(self._receive_controller_thread.STOP_TIMEOUT_SECS)
+            self.out_socket = None
+
         self.in_socket.close()
         try:
             unlink(self.parameters['in_socket_path'])
