@@ -6,10 +6,12 @@ from asyncconsole import AsyncConsole
 
 IN_CON_SOCKET_PATH = 'in_console_socket'
 OUT_CON_SOCKET_PATH = 'out_console_socket'
+line_number = 0
 
 def handle_received_output(data):
     global console
-    console.addline(data)
+    console.addline('%d %s' % (line_number,data))
+    line_number = line_number+1
 
 def main(stdscr):
     global console
