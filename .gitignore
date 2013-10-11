@@ -11,3 +11,5 @@ later
 
 .project
 .pydevproject
+
+test*
