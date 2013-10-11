@@ -5,6 +5,7 @@ import socket
 from mythreading import ReceiveSocketThread
 from mythreading import ReceiveQueueThread
 import sys
+import time
 
 class ConsoleModule(BotModule):
     
@@ -71,6 +72,8 @@ class ConsoleModule(BotModule):
                 return
             self.log.debug('Connection accepted.')
             self.log.debug('Connecting back to client...')
+            time.sleep(2)        # hack to give client time to create a return socket
+                                # this will be fixed when we implement a communication protocolq
             self.out_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
             try:
                 self.out_socket.connect(self.parameters['out_socket_path'])
