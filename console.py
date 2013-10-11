@@ -10,18 +10,28 @@ line_number = 0
 
 def handle_received_output(data):
     global console
-    console.addline('%d %s' % (line_number,data))
+    global line_number
+    # ugly hack that will be removed when a communication protocol is implemented
+    # avoids extra line breaks
+    if data[-1:] == '\n':
+        data=data[:-1]
+    console.addline(data)
     line_number = line_number+1
 
 def main(stdscr):
     global console
     console = AsyncConsole(stdscr)
+    # This is clumsy and will sometimes fail; server might be faster to connect back 
+    # before we have a socket ready
+    # This will be fixed when we implement a communication protocol
     in_con_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
     in_con_socket.connect(IN_CON_SOCKET_PATH)
     out_con_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
     out_con_socket.bind(OUT_CON_SOCKET_PATH)
     out_con_socket.listen(1)
+    console.addline('Connected to server. Waiting for server to connect back to client...')
     conn,addr = out_con_socket.accept()
+    console.addline('Connection received.')
     t = ReceiveSocketThread(processing_function=handle_received_output,connection=conn)
     t.start()
     try:
