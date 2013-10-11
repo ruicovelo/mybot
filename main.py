@@ -226,8 +226,7 @@ class MyBot(object):
         ''' Handle the output of text directing it to the available outputs '''
         sys.stdout.write(text+"\n")
         for o in self._outputs_subscribers:
-            logging.debug('Sending output to queue')
-            o.put(text)
+            o.put(text+"\n")
     
     def execute_command(self,command_line):
         logging.debug('Translating command line %s' % command_line)
