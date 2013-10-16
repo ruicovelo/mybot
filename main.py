@@ -35,7 +35,7 @@ class MyBot(object):
     _receive_outputs_thread = None      # waits for outputs from running modules
     
     def __init__(self):
-        self.log = MyLogger(self.name)
+        self.log = logging.getLogger(self.name)
         self.log.debug('Initializing MyBot...')
         
         # Loading acceptable commands
@@ -188,7 +188,8 @@ class MyBot(object):
                 new_module_name = loaded_module.__name__ + str(n)
                 n = n + 1
              
-            logger = MyLogger(new_module_name)
+            logger = logging.getLogger(new_module_name)
+            logger.set_log_file(new_module_name+'.log')
             logger.setLevel(logging.DEBUG)
             exec('new_module = loaded_module.%s(name=new_module_name,parameters=configuration_values)' % (loaded_module.__name__))
             new_module.set_output_queue(self._outputs)
@@ -275,7 +276,7 @@ class MyBotShell(cmd.Cmd):
 
 
 
-
+logging.setLoggerClass(MyLogger)
 bot=MyBot()
 
 # launching a basic shell
