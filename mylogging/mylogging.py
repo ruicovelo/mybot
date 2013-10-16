@@ -1,45 +1,22 @@
-'''
-Created on Jul 27, 2013
-
-@author: pedro
-'''
-
 import logging
 
-class MyLogging(object):
+class MyLogger(logging.getLoggerClass()):
     '''
-    Wrapper for the logging module
+    Wrapper for setting up my default logging configuration
     '''
-    _level = logging.DEBUG
-    _filename = None
-    _FORMAT = "%(asctime)s %(levelname)s %(message)s"
+    _FORMAT = "%(asctime)s %(name)s %(levelname)s %(message)s"
 
-    def __init__(self,filename=None,level=logging.DEBUG):
-        self._level = level
-        self._filename = filename
-        self._config()
+    def __init__(self,name):
+        super(MyLogger,self).__init__(name)
+        formatter = logging.Formatter(self._FORMAT)
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+        self.addHandler(console_handler)
         
-    def _config(self):
-        logging.basicConfig(level=self._level,format=self._FORMAT)
-            
-    def set_filename(self,filename):
-        #TODO: check if file exists
-        self._filename = filename
-        self._config()
-        
-    def set_level(self,level):
-        self._level = level
-        self._config()
-    
-    def debug(self,msg):
-        logging.debug(msg)
-    def info(self,msg):
-        logging.info(msg)
-    def warning(self,msg):
-        logging.warning(msg)
-    def error(self,msg):
-        logging.error(msg)
-    def critical(self,msg):
-        logging.critical(msg)
-        
-        
+    def set_log_file(self,filename):
+        formatter = logging.Formatter(self._FORMAT)
+        if filename:
+            file_handler = logging.FileHandler(filename)
+            file_handler.setFormatter(formatter)
+            self.addHandler(file_handler)
+
