@@ -19,4 +19,3 @@ class MyLogger(logging.getLoggerClass()):
             file_handler = logging.FileHandler(filename)
             file_handler.setFormatter(formatter)
             self.addHandler(file_handler)
-

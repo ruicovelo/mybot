@@ -46,13 +46,10 @@ class BotModule(Process):
     # for background working while main thread receives commands i.e.
     _work_thread = None
 
-    def __init__(self,name,parameters,log=None):
+    def __init__(self,name,parameters):
         signal.signal(signal.SIGTERM,self._forced_stop)
-        if log:
-            self.log = log
-        else:
-            self.log = logging
-            
+        self.log = logging.getLogger(name)
+
         self.name = name
         self.parameters=parameters
         self._run = Value('b',True,lock=False)

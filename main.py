@@ -8,7 +8,7 @@ from glob import glob                   # file system walking
 from ConfigParser import ConfigParser   
 from multiprocessing import Queue
 import mythreading
-
+from mylogging import MyLogger
 
 # My modules
 from communication import voice
@@ -35,7 +35,8 @@ class MyBot(object):
     _receive_outputs_thread = None      # waits for outputs from running modules
     
     def __init__(self):
-        logging.debug('Initializing MyBot...')
+        self.log = MyLogger(self.name)
+        self.log.debug('Initializing MyBot...')
         
         # Loading acceptable commands
         self.translator = BotCommandTranslator()
@@ -75,10 +76,10 @@ class MyBot(object):
  
         #TODO: not sure if this is necessary
         if self._receive_outputs_thread.is_alive():
-            logging.error('Receive outputs thread is taking too long to close...')
+            self.log.error('Receive outputs thread is taking too long to close...')
    
         if self._receive_commands_thread.is_alive():
-            logging.error('Receive commands thread is taking too long to close...')
+            self.log.error('Receive commands thread is taking too long to close...')
         
     def get_available_modules_files(self):
         '''
@@ -86,7 +87,7 @@ class MyBot(object):
         '''
         modules_list = []
         all_files = glob(self._MODULE_PATH+"/*.py")
-        logging.debug(all_files)
+        self.log.debug(all_files)
         module_name_reg=re.compile('[A-Z][a-z0-9]*Module.py')
         for file_path in all_files:
             filename = os.path.basename(file_path)
@@ -116,17 +117,17 @@ class MyBot(object):
         The modules are appended to self._loaded_modules
         '''
         #TODO: make sure we are not running any code in the module (code not inside classes)
-        logging.debug('load_modules')
+        self.log.debug('load_modules')
         available_modules_files = self.get_available_modules_files()
         for file_path in available_modules_files:
             module_name = os.path.splitext(os.path.basename(file_path))[0]
-            logging.info("Importing module '%s' from %s" % (module_name,file_path))
+            self.log.info("Importing module '%s' from %s" % (module_name,file_path))
             try:
                 loaded_module = imp.load_source(module_name,file_path)
                 self._loaded_modules.append(loaded_module)
             except Exception as e:
-                logging.error('Unable to load module!')
-                logging.error(str(type(e)) + e.message)
+                self.log.error('Unable to load module!')
+                self.log.error(str(type(e)) + e.message)
 
     def launch_module(self,loaded_module):
         '''
@@ -139,7 +140,7 @@ class MyBot(object):
         # by default, we will only run one instance of each module
         self._configuration_defaults={'Instances': 1,'Run': True}
         
-        logging.debug("Loading configuration file %s ..." % config_file_path)
+        self.log.debug("Loading configuration file %s ..." % config_file_path)
         config_parser.read(config_file_path)
 
         if not config_parser.has_section('Initialization'):
@@ -160,7 +161,7 @@ class MyBot(object):
             
             # searching for specific Instance configuration values
             if config_parser._sections.has_key('Instance ' + str(i)):
-                logging.debug('Loading specific configuration values for %s ...' % 'Instance ' + str(i))
+                self.log.debug('Loading specific configuration values for %s ...' % 'Instance ' + str(i))
                 # loading specific Instance configuration values
                 for option in config_parser._sections['Instance ' + str(i)].keys():
                     configuration_values[option]=config_parser._sections['Instance ' + str(i)][option]
@@ -171,7 +172,7 @@ class MyBot(object):
             else:
                 # not specific section found
                 # loading common option
-                logging.debug('Loading common configuration values...')
+                self.log.debug('Loading common configuration values...')
                 for option in initialization_values.keys():
                     configuration_values[option]=initialization_values[option]
             
@@ -186,6 +187,8 @@ class MyBot(object):
                 new_module_name = loaded_module.__name__ + str(n)
                 n = n + 1
              
+            logger = MyLogger(new_module_name)
+            logger.setLevel(logging.DEBUG)
             exec('new_module = loaded_module.%s(name=new_module_name,parameters=configuration_values)' % (loaded_module.__name__))
             new_module.set_output_queue(self._outputs)
             new_module.check_outputs_subscriber(self._outputs_subscribers)
@@ -229,10 +232,10 @@ class MyBot(object):
             o.put(text+"\n")
     
     def execute_command(self,command_line):
-        logging.debug('Translating command line %s' % command_line)
+        self.log.debug('Translating command line %s' % command_line)
         command = self.translator.get_command(command_line)
         if command:
-            logging.debug('Executing command %s' % command)
+            self.log.debug('Executing command %s' % command)
             exec("self."+command)
         else:
             self.output_text('Unknown command: %s' % command_line)
@@ -266,18 +269,8 @@ class MyBotShell(cmd.Cmd):
         #TODO: translate start command line
         self.bot.start_module(line)
  
-    def do_debug(self,line):
-        if not line:
-            logging.basicConfig(level=logging.DEBUG)
-        
 
 
-
-
-
-    
-logging.basicConfig(level=logging.DEBUG)
-logging.debug('Starting...')
 
 
 
