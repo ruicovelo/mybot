@@ -80,6 +80,7 @@ class MyBot(object):
    
         if self._receive_commands_thread.is_alive():
             self.log.error('Receive commands thread is taking too long to close...')
+        logging.shutdown()
         
     def get_available_modules_files(self):
         '''
