@@ -29,7 +29,7 @@ class MyLogger(logging.getLoggerClass()):
             self.removeHandler(self._file_handlers[filename])
             self._file_handlers.items().remove((filename,self._file_handlers[filename]))
 
-# DEBUG and sample code
+# testing and sample code
 if __name__ == '__main__':
     class test(object):
         def __init__(self,name):

@@ -36,6 +36,8 @@ class MyBot(object):
     
     def __init__(self):
         self.log = logging.getLogger(self.name)
+        self.log.setLevel(logging.DEBUG)
+        self.log.add_log_file('common.log')
         self.log.debug('Initializing MyBot...')
         
         # Loading acceptable commands
@@ -189,7 +191,8 @@ class MyBot(object):
                 n = n + 1
              
             logger = logging.getLogger(new_module_name)
-            logger.set_log_file(new_module_name+'.log')
+            logger.add_log_file(new_module_name+'.log')
+            logger.add_log_file('common.log')
             logger.setLevel(logging.DEBUG)
             exec('new_module = loaded_module.%s(name=new_module_name,parameters=configuration_values)' % (loaded_module.__name__))
             new_module.set_output_queue(self._outputs)
