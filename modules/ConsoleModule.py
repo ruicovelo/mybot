@@ -15,8 +15,8 @@ class ConsoleModule(BotModule):
     in_socket = None
     out_socket = None
 
-    def __init__(self,name='console',parameters={},log=None):
-        super(ConsoleModule,self).__init__(name=name,parameters=parameters,log=log)
+    def __init__(self,name='console',parameters={}):
+        super(ConsoleModule,self).__init__(name=name,parameters=parameters)
         self._receive_output_text = True        # setup to receive output_text from controller to send to client
         for arg in self._default_args:
             if not self.parameters.has_key(arg):

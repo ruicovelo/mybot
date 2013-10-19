@@ -12,4 +12,8 @@ later
 .project
 .pydevproject
 
+# test files
 test*
+
+# log files
+*.log

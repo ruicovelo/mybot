@@ -17,8 +17,8 @@ class SleeperModule(BotModule):
     _randomize = False
     _default_args = {'seconds':5,'randomize':False}
     
-    def __init__(self,name='sleeper',parameters={},log=None):
-        super(SleeperModule,self).__init__(name=name,parameters=parameters,log=log)
+    def __init__(self,name='sleeper',parameters={}):
+        super(SleeperModule,self).__init__(name=name,parameters=parameters)
         for arg in self._default_args:
             if not self.parameters.has_key(arg):
                 self.parameters[arg] = self._default_args[arg]    
