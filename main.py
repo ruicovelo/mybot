@@ -40,6 +40,7 @@ class MyBot(object):
         # Loading acceptable commands
         self.translator = BotCommandTranslator()
         self.translator.add_command("list", "list_modules()")
+        self.translator.add_command("shutdown","shutdown()")
         
         # Starting the thread that will receive commands in the background set from modules
         self._receive_commands_thread = mythreading.ReceiveQueueThread(self.execute_command,self._commands)
