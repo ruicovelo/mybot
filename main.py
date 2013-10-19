@@ -35,8 +35,24 @@ class MyBot(object):
     _receive_outputs_thread = None      # waits for outputs from running modules
     
     def __init__(self):
+        config_parser = ConfigParser()
+        config_file_path = 'MyBog.cfg'
+        config_parser.read(config_file_path)
+        configuration_values={'LogLevel': logging.DEBUG}         # set default values here
+        if not config_parser.has_section('Initialization'):
+            config_parser.add_section('Initialization')
+            
+        for default in configuration_values:
+            if config_parser.has_option('Initialization', default):
+                configuration_values[default] = config_parser.get('Initialization', default)
+            else:
+                config_parser.set('Initialization', default, configuration_values[default])
+        
+        config_parser.write(open(config_file_path,"w"))
+
+
         self.log = logging.getLogger(self.name)
-        self.log.setLevel(logging.DEBUG)
+        self.log.setLevel(int(configuration_values['LogLevel']))
         self.log.add_log_file('common.log')
         self.log.debug('Initializing MyBot...')
         
