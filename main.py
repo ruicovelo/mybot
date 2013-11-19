@@ -36,7 +36,7 @@ class MyBot(object):
     
     def __init__(self):
         config_parser = ConfigParser()
-        config_file_path = 'MyBog.cfg'
+        config_file_path = 'MyBot.cfg'
         config_parser.read(config_file_path)
         configuration_values={'LogLevel': logging.DEBUG}         # set default values here
         if not config_parser.has_section('Initialization'):
