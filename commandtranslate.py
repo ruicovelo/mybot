@@ -1,120 +1,98 @@
 import re
+from time import time
 
 
 
 class BotCommand(object):
     
+    origin = None
     destination = None
     command = None
-    arguments = None
+    arguments = []
     
-    def __init__(self):
-        pass
+    def __init__(self,destination,command,arguments,origin=None):
+        self.destination = destination
+        self.command = command
+        self.arguments = arguments
+        self.origin = origin
+
+    # for debugging purposes    
+    def tostring(self):
+        return 'from: %s \nto: %s \ncommand: %s\nargs: %s' % (self.origin,self.destination,self.command,self.arguments)
+
 
 class BotCommandTranslator(object):
-    '''
-    Translates commands input by user into command executed by the bot
-    '''
-    _commands = dict()
     
-    _common_commands = []               # common commands for bot controller and bot module (ex: start, stop)
-    _specific_commands = []
     _destinations = []
-
-    def __init__(self,common_commands,destinations,specific_commands):
-        self._common_commands=common_commands
+    _commands = {}
+    _current_destination = None
+    _last_current_destination_change = None
+    _conversation_timeout_secs = 10           # seconds
+    
+    def __init__(self,destinations,commands,conversation_timeout_secs=10):
         self._destinations=destinations
-        self._specific_commands=specific_commands
+        self._commands = commands
+        self._conversation_timeout_secs = conversation_timeout_secs
+    
+    def _set_current_destination(self,destination):
+        self._current_destination = destination
+        self._last_current_destination_change = time()
         
-    def add_command(self,line,command):
-        self._commands[line]=command
+    def _get_current_destination(self):
+        if self._last_current_destination_change:
+            if (time() - self._last_current_destination_change) > self._conversation_timeout_secs :
+                self._last_current_destination_change = None
+                self._current_destination = None
+            else:
+                self._last_current_destination_change = time()
+        return self._current_destination
+    
+    def validate(self,line,origin=None):
+        destination = self._get_current_destination()
+        # split into words 
+        #TODO: test with special characters
+        words = re.findall(r"[\w]+",line)
         
-    def get_command(self,line):
-        #TODO: interpret line into simple line
-        if self._commands.has_key(line):
-            return self._commands[line]
-        return None
-    
-    
-    def _array_to_regexp(self,array):
-        s = ''
-        for a in array:
-            s = s + a + '|'
-        return s
-
-
-    def check_common_commands(self,s):
-        destinations_re = self._array_to_regexp(self._destinations)
-        default_commands_re = self._array_to_regexp(self._common_commands)
-    
-        expression = '^ *(?P<destination>' + destinations_re+ ') *' +'(?P<command>'+ default_commands_re + ') *'+ '(?P<arguments>.*) *' +'$'
-        m=re.match(expression,s)
-        print m.group('command')
-        print m.group('destination')
-        if m and m.group.has_key('command') and m.group('destination'):
-            print('Match default command')
-            print('destination: '+ m.group('destination'))
-            print('command: '+m.group('command'))
-            print('arguments: '+m.group('arguments'))
-            destination = m.group('destination')
-            command = m.group('command')
-            arguments = m.group('arguments')
-            #TODO: return something interesting
-            return True
+        # check if first word is a destination 
+        w = 0
+        if self._destinations.__contains__(words[w]):
+            destination = words[0]
+            if len(words) > 1:
+                w = w + 1
+            else:
+                self._set_current_destination(destination)
+                return True
+            
+        # check if w word is a command accepted by the destination
+        if self._commands[destination].__contains__(words[w]):
+            command = words[w]
+            return BotCommand(destination,command,words[w+1:],origin)
         return False
-    
-    def check_specific_commands(self,s):
-        destinations_re = self._array_to_regexp(self._destinations)
-        
-        # match destination?
-        expression = '^ *(?P<destination>' + destinations_re + ') *'
-        m=re.match(expression,s)
-        if m:
-            destination = m.group('destination')
-            if self._specific_commands.has_key(destination):
-                commands_re = self._array_to_regexp(self._specific_commands[destination])
-                expression = '^ *'+destination+' *'+'(?P<command>'+ commands_re + ') *'+ '(?P<arguments>.*) *$'
-                m=re.match(expression,s)
-                if m:
-                    print('Match specific command')
-                    print('destination: '+ destination)
-                    print('command: ' + m.group('command'))
-                    print ('arguments: ' + m.group('arguments'))
-                    #TODO: return something interesting
-                    return True
-        return False       
 
-
-    
-    
 
 def main():
     # demo code
-    modules=['SleeperModule','ConsoleModule','MoneyModule']
+    modules=[None,'sleeper','console','money']
     default_commands=['stop','start','shutdown','list','show']
     
     module_specific_commands={}
-    module_specific_commands['ConsoleModule']=['disconnect']
-
-    translator = BotCommandTranslator(common_commands=default_commands,destinations=modules,specific_commands=module_specific_commands)
-    translator.add_command("list", "list()")
-    translator.add_command("quit","break")
-
-
+    
+    for module in modules:
+        module_specific_commands[module]=[]
+        for default_command in default_commands:
+            module_specific_commands[module].append(default_command)
+    
+    module_specific_commands['console'].append('disconnect')
+    translator = BotCommandTranslator(modules,module_specific_commands)
     
     while True:
-        s = raw_input()
+        s = raw_input().strip()
         if s=='':break
-        # match default commands
-        if translator.check_common_commands(s):
-            print('Match common command')
+        cmd = translator.validate(s)
+        if cmd == True:
             continue
-        else:
-            if translator.check_specific_commands(s):
-                print('Match specific command')
-                continue
-        print('Unknown command')
-        
+        if cmd:
+            print(cmd.tostring())
         
         
 
