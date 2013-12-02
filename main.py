@@ -61,17 +61,22 @@ class MyBot(object):
         self._receive_outputs_thread = mythreading.ReceiveQueueThread(self.output_text,self._outputs)
         self._receive_outputs_thread.start()
         
+        
+        self.translator = BotCommandTranslator(common_commands=['stop','start','status'])
+        #TODO: add more controller commands
+        self.translator.add_commands(None,['quit'])
+        
         # Loading modules and starting instances configured for auto start
         self._modules = BotModules(self._MODULE_PATH)
         instances = self._modules.get_instances()
-        for instance_name in instances: 
+        for instance_name in instances:
+            self.translator.add_commands(destination_name=instance_name, commands=[]) #TODO: add specific commands
             instances[instance_name].set_output_queue(self._outputs)
             instances[instance_name].check_outputs_subscriber(self._outputs_subscribers)
             instances[instance_name].set_output_commands_queue(self._commands)
             if instances[instance_name].running():
                 instances[instance_name].start()
             
-        #self.translator = BotCommandTranslator(modules,module_specific_commands)
 
     # COMMANDS
     
@@ -140,10 +145,13 @@ class MyBot(object):
     
     def execute_command(self,command_line):
         self.log.debug('Translating command line %s' % command_line)
-        command = self.translator.get_command(command_line)
+        command = self.translator.validate(command_line)
+        if command==True:
+            self.log.debug('Now talking to %s ' % self.translator.get_current_destination())
+            return
         if command:
             self.log.debug('Executing command %s' % command)
-            exec("self."+command)
+            #TODO: send command to destination
         else:
             self.output_text('Unknown command: %s' % command_line)
        
