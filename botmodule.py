@@ -1,8 +1,10 @@
-
+import os
+import re
+import imp
 from time import sleep
-
-
+from glob import glob
 from multiprocessing import Process
+from ConfigParser import ConfigParser   
 
 # Exchanging objects between processes
 from multiprocessing import Queue
@@ -16,11 +18,9 @@ from multiprocessing import Array
 
 from threading import Thread
 
-
 # Controlling process execution
 import signal
 import sys
-
 
 import logging
 
@@ -45,14 +45,15 @@ class BotModule(Process):
     
     # for background working while main thread receives commands i.e.
     _work_thread = None
-
     def __init__(self,name,parameters):
         signal.signal(signal.SIGTERM,self._forced_stop)
         self.log = logging.getLogger(name)
-
         self.name = name
         self.parameters=parameters
-        self._run = Value('b',True,lock=False)
+        if self.parameters['Run']=='True': #TODO: check other possible values for True (case, yes, 1, ...)
+            self._run = Value('b',True,lock=False)
+        else:
+            self._run = Value('b',False,lock=False)
         self._commands_queue = Queue()    
         self.log.debug('Module named "%s" initiating...' % self.name)
         super(BotModule,self).__init__()
@@ -60,6 +61,12 @@ class BotModule(Process):
     def _do_work(self):
         self.log.debug('Not doing the right work...')
         pass
+
+    def status(self):
+        if self._run.value:
+            return "Running"
+        else:
+            return "Stopped or stopping"  #TODO: better status support
            
     def start(self):
         self._run.value=True
@@ -84,6 +91,9 @@ class BotModule(Process):
     def stopping(self):
         return not self._run.value
  
+    def running(self):
+        return self._run.value
+
     def add_command(self,command,timeout=None):
         self._commands_queue.put(obj=command, block=True, timeout=timeout)
  
@@ -130,3 +140,133 @@ class BotModule(Process):
         except AttributeError:
             return s    
    
+
+class BotModules(object):
+    '''
+    A list of BotModules and methods for loading and managing the availability of the modules.
+    '''
+    
+    _MODULE_PATH = None
+    _loaded_modules=[]          # code imported and available for lauching instances of the modules
+    _instances={}               # running instances of modules
+
+    def __init__(self,module_path):
+        self.log = logging.getLogger('BotModules')
+        self.log.setLevel(logging.DEBUG)
+        self._MODULE_PATH = module_path
+        self.load_modules()
+
+    def _get_available_modules_files(self):
+        '''
+        Search the modules path for files available to import as modules
+        '''
+        modules_list = []
+        all_files = glob(self._MODULE_PATH+"/*.py")
+        self.log.debug(all_files)
+        module_name_reg=re.compile('[A-Z][a-z0-9]*Module.py')
+        for file_path in all_files:
+            filename = os.path.basename(file_path)
+            if module_name_reg.match(filename):
+                modules_list.append(file_path)
+        return modules_list
+
+    def get_instances(self):
+        return self._instances
+        #FIX
+        runnable_modules = []
+        for runnable_module in self._instances.keys():
+            runnable_modules.append((runnable_module,self._instances[runnable_module].is_alive()))
+        return runnable_modules
+
+    def load_modules(self):
+        '''
+        Import modules class definitions and code. Does not expect to run any code in the module.
+        The modules are appended to self._loaded_modules
+        '''
+        available_modules_files = self._get_available_modules_files()
+        for file_path in available_modules_files:
+            loaded_module = self.load_module(file_path)
+            if loaded_module:
+                self.initialize_module(loaded_module)
+
+    def load_module(self,file_path):
+        #TODO: make sure we are not running any code in the module (code not inside classes)
+        module_name = os.path.splitext(os.path.basename(file_path))[0]
+        self.log.info("Importing module '%s' from %s" % (module_name,file_path))
+        try:
+            loaded_module = imp.load_source(module_name,file_path)
+            self._loaded_modules.append(loaded_module)
+            return loaded_module
+        except Exception as e:
+            self.log.error('Unable to load module!')
+            self.log.error(str(type(e)) + e.message)
+            return False
+
+    def initialize_module(self,loaded_module):
+        '''
+        Loads configuration parameters from loaded_module configuration file, applies to loaded_module and prepares instances for running.
+        '''
+        config_parser = ConfigParser()
+        config_file_path = os.path.join(self._MODULE_PATH+loaded_module.__name__+'.cfg')
+        initialization_values = {}
+
+        # by default, we will only run one instance of each module
+        self._configuration_defaults={'Instances': 1,'Run': False}
+        
+        self.log.debug("Loading configuration file %s ..." % config_file_path)
+        config_parser.read(config_file_path)
+
+        if not config_parser.has_section('Initialization'):
+            config_parser.add_section('Initialization')
+            
+        for default in self._configuration_defaults:
+            if config_parser.has_option('Initialization', default):
+                initialization_values[default] = config_parser.get('Initialization', default)
+            else:
+                initialization_values[default] = self._configuration_defaults[default]
+                config_parser.set('Initialization', default, self._configuration_defaults[default])
+        
+        config_parser.write(open(config_file_path,"w"))
+
+        # applying configuration values to each instance of the module
+        for i in range(1,int(initialization_values['Instances'])+1):
+            configuration_values = {}
+            
+            # searching for specific Instance configuration values
+            if config_parser._sections.has_key('Instance ' + str(i)):
+                self.log.debug('Loading specific configuration values for %s ...' % 'Instance ' + str(i))
+                # loading specific Instance configuration values
+                for option in config_parser._sections['Instance ' + str(i)].keys():
+                    configuration_values[option]=config_parser._sections['Instance ' + str(i)][option]
+                # adding common values do Instance configuration that were not specified 
+                for option in initialization_values.keys():
+                    if not configuration_values.has_key(option):
+                        configuration_values[option]=initialization_values[option]
+            else:
+                # not specific section found
+                # loading common option
+                self.log.debug('Loading common configuration values...')
+                for option in initialization_values.keys():
+                    configuration_values[option]=initialization_values[option]
+            
+            new_module = None
+            new_module_name = None
+            if configuration_values.has_key('name'):
+                new_module_name = configuration_values['name']
+            else:
+                new_module_name = loaded_module.__name__
+            n = 1
+            while self._instances.has_key(new_module_name):
+                new_module_name = loaded_module.__name__ + str(n)
+                n = n + 1
+             
+            logger = logging.getLogger(new_module_name)
+            logger.add_log_file(new_module_name+'.log')
+            logger.add_log_file('common.log')
+            logger.setLevel(logging.DEBUG)
+            exec('new_module = loaded_module.%s(name=new_module_name,parameters=configuration_values)' % (loaded_module.__name__))
+            #new_module.set_output_queue(self._outputs)
+            #new_module.check_outputs_subscriber(self._outputs_subscribers)
+            #new_module.set_output_commands_queue(self._commands)
+            self._instances[new_module.name]=new_module
+

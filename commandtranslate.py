@@ -23,16 +23,29 @@ class BotCommand(object):
 
 class BotCommandTranslator(object):
     
-    _destinations = []
+    _common_commands={}                     # commands accepted by all modules / destinations
     _commands = {}
     _current_destination = None
     _last_current_destination_change = None
     _conversation_timeout_secs = 10           # seconds
     
-    def __init__(self,destinations,commands,conversation_timeout_secs=10):
-        self._destinations=destinations
-        self._commands = commands
+    def __init__(self,common_commands={},conversation_timeout_secs=10):
+        self._common_commands=common_commands
         self._conversation_timeout_secs = conversation_timeout_secs
+
+    def add_commands(self,module_name,commands):
+        if not self._commands.has_key(module_name):
+            self._commands[module_name]=[]    
+        self._commands[module_name].extend(commands)
+        
+    def remove_destination(self,destination_name):
+        try:
+            self._destinations.remove(destination_name)
+            if self._current_destination == destination_name:
+                self._current_destination = None
+                self._last_current_destination_change = None
+        except ValueError:
+            pass
     
     def _set_current_destination(self,destination):
         self._current_destination = destination
@@ -49,13 +62,14 @@ class BotCommandTranslator(object):
     
     def validate(self,line,origin=None):
         destination = self._get_current_destination()
+        
         # split into words 
         #TODO: test with special characters
         words = re.findall(r"[\w]+",line)
         
         # check if first word is a destination 
         w = 0
-        if self._destinations.__contains__(words[w]):
+        if self._commands.keys().__contains__(words[w]):
             destination = words[0]
             if len(words) > 1:
                 w = w + 1
@@ -64,7 +78,7 @@ class BotCommandTranslator(object):
                 return True
             
         # check if w word is a command accepted by the destination
-        if self._commands[destination].__contains__(words[w]):
+        if self._common_commands.__contains__(words[w]) or self._commands[destination].__contains__(words[w]):
             command = words[w]
             return BotCommand(destination,command,words[w+1:],origin)
         return False
@@ -73,17 +87,16 @@ class BotCommandTranslator(object):
 def main():
     # demo code
     modules=[None,'sleeper','console','money']
-    default_commands=['stop','start','shutdown','list','show']
-    
+    common_commands=['stop','start','status']
     module_specific_commands={}
-    
+
     for module in modules:
-        module_specific_commands[module]=[]
-        for default_command in default_commands:
-            module_specific_commands[module].append(default_command)
-    
+        module_specific_commands[module]=[]   
     module_specific_commands['console'].append('disconnect')
-    translator = BotCommandTranslator(modules,module_specific_commands)
+    translator = BotCommandTranslator(common_commands)
+    
+    for module in modules:    
+        translator.add_commands(module,module_specific_commands[module])
     
     while True:
         s = raw_input().strip()
@@ -93,9 +106,7 @@ def main():
             continue
         if cmd:
             print(cmd.tostring())
-        
-        
 
-
+        
 if __name__ == '__main__':
     main()
