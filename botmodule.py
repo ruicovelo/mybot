@@ -37,7 +37,7 @@ class BotModule(Process):
     name = None
     
     _run = None                     # set to False to stop module as soon as it checks this value (self._stopping())
-    _commands_queue = None          # queue for receiving async commands from controller    
+    _commands_queue = None          # queue for receiving asynchronous commands from controller    
     _commands_output_queue = None   # queue for sending commands to controller
     _output_text_queue = Queue()    # queue for receiving text from controller
     _output_queue = None            # queue to output data to controller
@@ -147,12 +147,11 @@ class BotModules(object):
     '''
     
     _MODULE_PATH = None
-    _loaded_modules=[]          # code imported and available for lauching instances of the modules
+    _loaded_modules=[]          # code imported and available for launching instances of the modules
     _instances={}               # running instances of modules
 
     def __init__(self,module_path):
         self.log = logging.getLogger('BotModules')
-        self.log.setLevel(logging.DEBUG)
         self._MODULE_PATH = module_path
         self.load_modules()
 
@@ -170,13 +169,11 @@ class BotModules(object):
                 modules_list.append(file_path)
         return modules_list
 
+    def get_modules(self):
+        return self._loaded_modules
+    
     def get_instances(self):
         return self._instances
-        #FIX
-        runnable_modules = []
-        for runnable_module in self._instances.keys():
-            runnable_modules.append((runnable_module,self._instances[runnable_module].is_alive()))
-        return runnable_modules
 
     def load_modules(self):
         '''
@@ -190,6 +187,9 @@ class BotModules(object):
                 self.initialize_module(loaded_module)
 
     def load_module(self,file_path):
+        '''
+        Load the code for the module. Should not run any instance of the module!
+        '''
         #TODO: make sure we are not running any code in the module (code not inside classes)
         module_name = os.path.splitext(os.path.basename(file_path))[0]
         self.log.info("Importing module '%s' from %s" % (module_name,file_path))
@@ -249,24 +249,21 @@ class BotModules(object):
                 for option in initialization_values.keys():
                     configuration_values[option]=initialization_values[option]
             
-            new_module = None
-            new_module_name = None
+            new_instance = None
+            new_instance_name = None
             if configuration_values.has_key('name'):
-                new_module_name = configuration_values['name']
+                new_instance_name = configuration_values['name']
             else:
-                new_module_name = loaded_module.__name__
+                new_instance_name = loaded_module.__name__
             n = 1
-            while self._instances.has_key(new_module_name):
-                new_module_name = loaded_module.__name__ + str(n)
+            while self._instances.has_key(new_instance_name):
+                new_instance_name = loaded_module.__name__ + str(n)
                 n = n + 1
              
-            logger = logging.getLogger(new_module_name)
-            logger.add_log_file(new_module_name+'.log')
+            logger = logging.getLogger(new_instance_name)
+            logger.add_log_file(new_instance_name+'.log')
             logger.add_log_file('common.log')
             logger.setLevel(logging.DEBUG)
-            exec('new_module = loaded_module.%s(name=new_module_name,parameters=configuration_values)' % (loaded_module.__name__))
-            #new_module.set_output_queue(self._outputs)
-            #new_module.check_outputs_subscriber(self._outputs_subscribers)
-            #new_module.set_output_commands_queue(self._commands)
-            self._instances[new_module.name]=new_module
+            exec('new_instance = loaded_module.%s(name=new_instance_name,parameters=configuration_values)' % (loaded_module.__name__))
+            self._instances[new_instance.name]=new_instance
 
