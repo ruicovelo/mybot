@@ -20,9 +20,10 @@ class ConsoleModule(BotModule):
         self._receive_output_text = True        # setup to receive output_text from controller to send to client
         for arg in self._default_args:
             if not self.parameters.has_key(arg):
-                self.parameters[arg] = self._default_args[arg]    
+                self.parameters[arg] = self._default_args[arg]
+        self._commands['send']=self.send_text    
  
-    def stop(self):
+    def stop(self,arguments=None):
         super(ConsoleModule,self).stop()
         # stopping gently
         if self._receive_client_thread and self._receive_client_thread.is_alive():
@@ -38,7 +39,7 @@ class ConsoleModule(BotModule):
             if self._receive_controller_thread:
                 self.log.error('_receive_controller_thread taking too long to close!')
         # stopping not so gently
-        self.terminate()
+        #self.terminate()
     
     def _forced_stop(self,signum,frame):
         #TODO: send client goodbye?
@@ -53,6 +54,9 @@ class ConsoleModule(BotModule):
 
     def _process_controller_data(self,data):
         self.out_socket.sendall(data)           # send to client data sent by controller
+        
+    def send_text(self,arguments):
+        self.out_socket.sendall(str(arguments))
         
     def run(self):
         self.in_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
@@ -90,12 +94,18 @@ class ConsoleModule(BotModule):
             
             while not self.stopping() and self._receive_client_thread.is_alive():
                 try:
-                    s = self._commands_queue.get(block=True, timeout=5)
-                    self.log.debug(s)
+                    cmd = self._commands_queue.get(block=True, timeout=5)
+                    if cmd:
+                        self.log.debug('Received command %s' % cmd.tostring())
                 except Empty:
                     continue
                 if not self.stopping():
-                    self.out_socket.sendall(s)
+                    try:
+                        arguments = cmd.arguments
+                        exec(self._commands[cmd.name])
+                    except KeyError:
+                        self.log.debug('Unknown command %s ' % cmd.tostring())
+                    
             if not self._receive_client_thread.is_alive():
                 self.log.debug('Client disconnected...')
                 
