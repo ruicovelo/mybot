@@ -7,18 +7,20 @@ class BotCommand(object):
     
     origin = None
     destination = None
+    name = None
     command = None
     arguments = []
     
-    def __init__(self,destination,command,arguments,origin=None):
+    def __init__(self,destination,name,command,arguments,origin=None):
         self.destination = destination
+        self.name = name
         self.command = command
         self.arguments = arguments
         self.origin = origin
 
     # for debugging purposes    
     def tostring(self):
-        return 'from: %s \nto: %s \ncommand: %s\nargs: %s' % (self.origin,self.destination,self.command,self.arguments)
+        return 'from: %s \nto: %s \nname: %s\ncommand: %s\nargs: %s' % (self.origin,self.destination,self.name,self.command,self.arguments)
 
 
 class BotCommandTranslator(object):
@@ -29,14 +31,23 @@ class BotCommandTranslator(object):
     _last_current_destination_change = None
     _conversation_timeout_secs = 10           # seconds
     
-    def __init__(self,common_commands={},conversation_timeout_secs=10):
-        self._common_commands=common_commands
+    def __init__(self,conversation_timeout_secs=10):
         self._conversation_timeout_secs = conversation_timeout_secs
 
-    def add_commands(self,destination_name,commands):
+    def add_command(self,destination_name,command_name):
+        '''
+        Add a command to our dictionary of commands
+        '''
         if not self._commands.has_key(destination_name):
-            self._commands[destination_name]=[]    
-        self._commands[destination_name].extend(commands)
+            self._commands[destination_name]=[]
+        self._commands[destination_name].append(command_name)
+        
+    def add_commands(self,destination_name,commands):
+        '''
+        Add a list of commands one by one
+        '''
+        for command_name in commands:
+            self.add_command(destination_name, command_name)
         
     def remove_destination(self,destination_name):
         try:
@@ -80,7 +91,7 @@ class BotCommandTranslator(object):
             return destination
         else:
             return ''
-    
+
     def validate(self,line,origin=None):
         destination = self._get_current_destination()
         
@@ -91,7 +102,7 @@ class BotCommandTranslator(object):
             # only non alphanumeric characters?
             if self._common_commands.__contains__(line) or self._commands[destination].__contains__(line):
                 command = line
-                return BotCommand(destination,command,line,origin)
+                return BotCommand(destination=destination,name=line,command=command,arguments=line,origin=origin)
             return False
             
         # check if first word is a destination 
@@ -105,25 +116,44 @@ class BotCommandTranslator(object):
                 return True
             
         # check if w word is a command accepted by the destination
-        if self._common_commands.__contains__(words[w]) or self._commands[destination].__contains__(words[w]):
+        if self._common_commands.__contains__(words[w]):
             command = words[w]
-            return BotCommand(destination,command,words[w+1:],origin)
+            return BotCommand(destination=destination,name=words[w],command=command,arguments=words[w+1:],origin=origin)
+        
+        if self._commands[destination].__contains__(words[w]):
+            command = words[w]
+            return BotCommand(destination=destination,name=words[w],command=command,arguments=words[w+1:],origin=origin)
         return False
+
+
+def stop(arguments):
+    print('stopping')
+
+def start(arguments):
+    print('starting')
+
+def end_conversation(arguments):
+    print('end conversation')
 
 
 def main():
     # demo code
     modules=[None,'sleeper','console','money']
-    common_commands=['stop','start','status','ok','bye','.','?']
+    #common_commands=['stop','start','status',('ok','bye','.'),'?']
+    common_commands={'stop': stop,'start': start,'.':end_conversation}
     module_specific_commands={}
 
-    for module in modules:
-        module_specific_commands[module]=[]   
-    module_specific_commands['console'].append('disconnect')
-    translator = BotCommandTranslator(common_commands)
+    #for module in modules:
+    #    module_specific_commands[module]=[]   
+    #module_specific_commands['console'].append('disconnect')
+    translator = BotCommandTranslator()
     
-    for module in modules:    
-        translator.add_commands(module,module_specific_commands[module])
+    for module in modules:
+        for common_command in common_commands.keys():
+            translator.add_command(destination_name=module, command_name=common_command, command=common_commands[common_command])
+        
+    #for module in modules:    
+    #    translator.add_commands(module,module_specific_commands[module])
     
     while True:
         s = raw_input().strip()
@@ -133,6 +163,8 @@ def main():
             print('Now talking to %s ' % translator.get_current_destination())
             continue
         if cmd:
+            cmd.command(cmd.arguments)
+            print(cmd)
             if cmd.command in ['ok','bye','.']:
                 print('%s: Bye!' % translator.get_current_destination())
                 translator.end_conversation()

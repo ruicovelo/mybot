@@ -1,6 +1,5 @@
 import sys
 import logging
-import cmd  #TODO: lose this
 from ConfigParser import ConfigParser   
 from multiprocessing import Queue
 import mythreading
@@ -17,11 +16,11 @@ class MyBot(object):
     
     _MODULE_PATH='modules/'
     _modules = None
-    _outputs = Queue()
-    _commands = Queue()
     _outputs_subscribers = []
+    _outputs_queue = Queue()
+    _commands_queue = Queue()
+    _commands = {}
 
-    
     translator = None
     
     _shuttingdown = False
@@ -46,41 +45,64 @@ class MyBot(object):
         
         config_parser.write(open(config_file_path,"w"))
 
-
         self.log = logging.getLogger(self.name)
         self.log.setLevel(int(configuration_values['LogLevel']))
         self.log.add_log_file('common.log')
         self.log.debug('Initializing MyBot...')
         
-        
         # Starting the thread that will receive commands in the background set from modules
-        self._receive_commands_thread = mythreading.ReceiveQueueThread(self.execute_command,self._commands)
+        self._receive_commands_thread = mythreading.ReceiveQueueThread(self.execute_command,self._commands_queue)
         self._receive_commands_thread.start()
         
         # Starting the thread that will receive text to process (display/save/send)
-        self._receive_outputs_thread = mythreading.ReceiveQueueThread(self.output_text,self._outputs)
+        self._receive_outputs_thread = mythreading.ReceiveQueueThread(self.output_text,self._outputs_queue)
         self._receive_outputs_thread.start()
         
         
-        self.translator = BotCommandTranslator(common_commands=['stop','start','status'])
+        self.translator = BotCommandTranslator()
         #TODO: add more controller commands
-        self.translator.add_commands(None,['quit'])
+        self._commands['quit']='self.shutdown()'
+        self._commands['shutdown']='self.shutdown()'
+        self._commands['list']='self.list_modules()'
+        self._commands['start']='self.start(arguments)'
+        self._commands['stop']='self.stop(arguments)'
+        self.translator.add_commands(None,self._commands)
         
         # Loading modules and starting instances configured for auto start
         self._modules = BotModules(self._MODULE_PATH)
         instances = self._modules.get_instances()
         for instance_name in instances:
-            self.translator.add_commands(destination_name=instance_name, commands=[]) #TODO: add specific commands
-            instances[instance_name].set_output_queue(self._outputs)
-            instances[instance_name].check_outputs_subscriber(self._outputs_subscribers)
-            instances[instance_name].set_output_commands_queue(self._commands)
             if instances[instance_name].running():
-                instances[instance_name].start()
-            
+                self.start([instance_name])
 
     # COMMANDS
+    def start(self,arguments=None):
+        if arguments:
+            instance_name = arguments[0]
+            instance = self._modules.get_instance(instance_name)
+            if instance:
+                self.output_text('Starting %s ' % instance.name)
+                self.translator.add_commands(destination_name=instance_name, commands=instance.get_commands()) #TODO: add specific commands
+                instance.set_output_queue(self._outputs_queue)
+                instance.check_outputs_subscriber(self._outputs_subscribers)
+                instance.set_output_commands_queue(self._commands_queue)
+                instance.start()
+            else:
+                self.log.error('Instance not known: %s' % instance_name)                              
+                
     
-    def shutdown(self):
+    def stop(self,arguments=None):
+        if arguments:
+            instance = self._modules.get_instance(arguments[0])
+            if instance:
+                if instance.running():
+                    self.output_text('Stopping %s ' % instance.name)
+                    instance.stop()
+                    #TODO: check if instance really stopped
+                    
+            
+    
+    def shutdown(self,arguments=None):
         self._shuttingdown = True
         self.output_text('Shutting down...')
         
@@ -97,7 +119,8 @@ class MyBot(object):
             self._receive_outputs_thread.stop()
  
         self._receive_outputs_thread.join(self._THREAD_TIMEOUT_SECS)
-        self._receive_commands_thread.join(self._THREAD_TIMEOUT_SECS)   
+        #TODO: FIX this - cannot join current thread - this code is executed by the receive_commands_thread
+        #self._receive_commands_thread.join(self._THREAD_TIMEOUT_SECS)   
  
         #TODO: not sure if this is necessary
         if self._receive_outputs_thread.is_alive():
@@ -110,25 +133,24 @@ class MyBot(object):
         logging.shutdown()
         
 
-
     def _get_module(self,module_name):
         if self._modules.get_instances().has_key(module_name):
             return self._modules.get_instances()[module_name]
         return False
 
-    def list_modules(self):
-        runnable_modules = self._modules.get_instances()
-        if not runnable_modules:
-            self.output_text('No modules available!')
+    def list_modules(self,arguments=None):
+        instances = self._modules.get_instances()
+        if not instances:
+            self.output_text('No instances available!')
             return
 
-        self.output_text('Available modules:')
-        for rm in runnable_modules:
-            self.output_text("%s\t\t%s" % (rm,runnable_modules[rm].status()))
+        self.output_text('Available instances of modules:')
+        for instance in instances:
+            self.output_text("%s\t\t%s" % (instance,instances[instance].status()))
     
-    def say(self,text):
+    def say(self,arguments):
         #TODO: move this to a module
-        if not self._voice.speak(text):
+        if not self._voice.speak(arguments):
             print("Don't have voice?!")
   
     def status(self):
@@ -150,52 +172,23 @@ class MyBot(object):
             self.log.debug('Now talking to %s ' % self.translator.get_current_destination())
             return
         if command:
-            self.log.debug('Executing command %s' % command)
-            #TODO: send command to destination
+            if not command.destination:
+                self.log.debug('Executing command %s' % command.tostring())
+                arguments = command.arguments
+                exec(self._commands[command.name])
+                return
+            self.log.debug('Send command to %s ' % command.destination)
+            self._modules.get_instance(command.destination).add_command(command)
         else:
             self.output_text('Unknown command: %s' % command_line)
        
-
-            
-        
-class MyBotShell(cmd.Cmd):
-    prompt = "> "
-    bot = None
-    
-    def do_status(self,line):
-        bot.status()
-    
-    def do_say(self,line):
-        bot.say(line)
-    
-    def do_quit(self,line):
-        bot.shutdown()
-        return True
-    
-    def do_list(self,line):
-        #TODO: translate list command line
-        self.bot.list_modules()
-    
-    def do_stop(self,line):
-        #TODO: translate stop command line
-        self.bot.stop_module(line)
-                
-    def do_start(self,line):
-        #TODO: translate start command line
-        self.bot.start_module(line)
- 
-
-
 
 
 
 logging.setLoggerClass(MyLogger)
 bot=MyBot()
 
-# launching a basic shell
-shell=MyBotShell()
-shell.bot = bot
-
-shell.cmdloop(" ")
-
+# main thread will exit now
+# receive_commands_thread keeps this alive
+#TODO:  have main thread handle commands instead ?
 
