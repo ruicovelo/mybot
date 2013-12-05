@@ -24,7 +24,9 @@ import sys
 
 import logging
 
-class BotModule(Process):
+from commandtranslate import BotCommandTranslator
+
+class BotModule(object):
     '''
     This should be inherited
     TODO: force this?
@@ -32,6 +34,7 @@ class BotModule(Process):
     This should be used for creating modules, abstracting the part of managing the process that runs the module.
     Multitasking within the module should be done with threads.
     '''
+    _process = None
     
     parameters = None               # configured startup parameters
     name = None
@@ -42,6 +45,7 @@ class BotModule(Process):
     _output_text_queue = Queue()    # queue for receiving text from controller
     _output_queue = None            # queue to output data to controller
     _receive_output_text = False    # set to True to subscribe to receive text output to stdout
+    _commands = {}
     
     # for background working while main thread receives commands i.e.
     _work_thread = None
@@ -56,38 +60,58 @@ class BotModule(Process):
             self._run = Value('b',False,lock=False)
         self._commands_queue = Queue()    
         self.log.debug('Module named "%s" initiating...' % self.name)
-        super(BotModule,self).__init__()
         
+        # default commands
+        self._commands['start']='self.start()'
+        self._commands['stop']='self.stop()'
+        
+    def _init_process(self):
+        self._process = Process()
+        self._process.run = self.run
+    
+    def get_commands(self):
+        return self._commands.keys()
+    
     def _do_work(self):
         self.log.debug('Not doing the right work...')
         pass
+    
+    def run(self):
+        self.log.debug('This function should be overriden')
+        pass
 
-    def status(self):
-        if self._run.value:
+    def status(self,arguments=None):
+        if self._run.value == True and self._process.is_alive():
             return "Running"
         else:
             return "Stopped or stopping"  #TODO: better status support
            
-    def start(self):
+    def start(self,arguments=None):
+        #TODO: check if process is running
+        self._init_process()
         self._run.value=True
         #TODO: change Thread to MyThread (stoppable thread)
         self._work_thread = Thread(target=self._do_work)
-        super(BotModule,self).start()
+        #super(BotModule,self).start()
+        self._process.start()
       
     def _forced_stop(self,signum,frame):
         self.log.debug('Stopping NOW %s ' % self.name)
         sys.exit()  
     
     def force_stop(self):
-        self.terminate()
+        self._process.terminate()
+    
+    def terminate(self):
+        self._process.terminate()
         
     # Tell module to stop as soon as possible (module has to check the _run flag)
     # This method should be overriden if the module can stop at any time with a SIGTERM signal
     # In that case call force_stop instead.
-    def stop(self):
+    def stop(self,arguments=None):
         self.log.debug('Stopping %s ...' % self.name)
         self._run.value=False
-        
+               
     def stopping(self):
         return not self._run.value
  
@@ -95,6 +119,8 @@ class BotModule(Process):
         return self._run.value
 
     def add_command(self,command,timeout=None):
+        ''' Add command to the queue of commands to process in order '''
+        self.log.debug('Adding command to queue\n %s' % command.tostring())
         self._commands_queue.put(obj=command, block=True, timeout=timeout)
  
     def _get_command_available(self):
@@ -125,9 +151,9 @@ class BotModule(Process):
             return True
         return False
     
-    def output(self,obj):
+    def output(self,arguments):
         if self._output_queue:
-            self._output_queue.put(obj)
+            self._output_queue.put(arguments)
             return True
         return False
 
@@ -138,7 +164,14 @@ class BotModule(Process):
             else:
                 return False
         except AttributeError:
-            return s    
+            return s
+        
+    def _execute(self,command):
+        if command and command.destination==self.name:
+            self.log.debug('Executing command %s' % command)
+            command.command(command.arguments)
+        else:
+            self.output_text('Unknown command: %s' % command.tostring())    
    
 
 class BotModules(object):
@@ -148,7 +181,7 @@ class BotModules(object):
     
     _MODULE_PATH = None
     _loaded_modules=[]          # code imported and available for launching instances of the modules
-    _instances={}               # running instances of modules
+    _instances={}               # dictionary of available instances of modules (running modules) key=instance name, item=BotModule
 
     def __init__(self,module_path):
         self.log = logging.getLogger('BotModules')
@@ -174,6 +207,12 @@ class BotModules(object):
     
     def get_instances(self):
         return self._instances
+    
+    def get_instance(self,instance_name):
+        try:
+            return self._instances[instance_name]
+        except KeyError:
+            return None        
 
     def load_modules(self):
         '''
@@ -266,4 +305,5 @@ class BotModules(object):
             logger.setLevel(logging.DEBUG)
             exec('new_instance = loaded_module.%s(name=new_instance_name,parameters=configuration_values)' % (loaded_module.__name__))
             self._instances[new_instance.name]=new_instance
+
 
