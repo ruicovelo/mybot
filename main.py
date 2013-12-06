@@ -90,7 +90,6 @@ class MyBot(object):
             else:
                 self.log.error('Instance not known: %s' % instance_name)                              
                 
-    
     def stop(self,arguments=None):
         if arguments:
             instance = self._modules.get_instance(arguments[0])
@@ -100,8 +99,6 @@ class MyBot(object):
                     instance.stop()
                     #TODO: check if instance really stopped
                     
-            
-    
     def shutdown(self,arguments=None):
         self._shuttingdown = True
         self.output_text('Shutting down...')

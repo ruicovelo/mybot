@@ -6,6 +6,8 @@ from mythreading import ReceiveSocketThread
 from mythreading import ReceiveQueueThread
 import sys
 import time
+import cPickle
+from commandtranslate import BotCommand
 
 class ConsoleModule(BotModule):
     
@@ -21,7 +23,7 @@ class ConsoleModule(BotModule):
         for arg in self._default_args:
             if not self.parameters.has_key(arg):
                 self.parameters[arg] = self._default_args[arg]
-        self._commands['send']=self.send_text    
+        self._commands['send']='self.send_command(arguments)'
  
     def stop(self,arguments=None):
         super(ConsoleModule,self).stop()
@@ -50,13 +52,21 @@ class ConsoleModule(BotModule):
         sys.exit()
     
     def _process_client_data(self,data):
+        self.log.debug('Client data: %s' % data)
         self.output_command(data)               # send command line received from client to controller
 
     def _process_controller_data(self,data):
-        self.out_socket.sendall(data)           # send to client data sent by controller
+        self.log.debug('Controller data: %s' % data)
+        #(self,destination,name,command,arguments,origin=None):
+        cmd = BotCommand(destination='console',name='output',command=None,arguments=data,origin=None)
+        self.out_socket.sendall(cPickle.dumps(cmd))           # send to client data sent by controller
         
     def send_text(self,arguments):
         self.out_socket.sendall(str(arguments))
+        
+    def send_command(self,arguments):
+        self.log.debug('Sending command')
+        self.out_socket.sendall(cPickle.dumps(arguments))
         
     def run(self):
         self.in_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
@@ -77,7 +87,7 @@ class ConsoleModule(BotModule):
             self.log.debug('Connection accepted.')
             self.log.debug('Connecting back to client...')
             time.sleep(2)        # hack to give client time to create a return socket
-                                # this will be fixed when we implement a communication protocolq
+                                # this will be fixed when we implement a communication protocol
             self.out_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
             try:
                 self.out_socket.connect(self.parameters['out_socket_path'])

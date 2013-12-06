@@ -3,6 +3,9 @@ import socket
 import os
 from mythreading import ReceiveSocketThread
 from asyncconsole import AsyncConsole
+import cPickle
+from commandtranslate import BotCommand
+import sys 
 
 IN_CON_SOCKET_PATH = 'in_console_socket'
 OUT_CON_SOCKET_PATH = 'out_console_socket'
@@ -13,10 +16,15 @@ def handle_received_output(data):
     global line_number
     # ugly hack that will be removed when a communication protocol is implemented
     # avoids extra line breaks
-    if data[-1:] == '\n':
-        data=data[:-1]
-    console.addline(data)
-    line_number = line_number+1
+    cmd=cPickle.loads(data)
+    if cmd.name == 'output':
+        if cmd.arguments[-1:] == '\n':
+            cmd.arguments=cmd.arguments[:-1]
+        console.addline(cmd.arguments)
+        line_number = line_number+1
+        return
+    if cmd.name == 'quit':
+        sys.exit()
 
 def main(stdscr):
     global console
