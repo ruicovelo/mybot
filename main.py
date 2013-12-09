@@ -63,7 +63,6 @@ class MyBot(object):
         
         self.translator = BotCommandTranslator()
         #TODO: add more controller commands
-        self._commands['quit']='self.shutdown()'
         self._commands['shutdown']='self.shutdown()'
         self._commands['list']='self.list_modules()'
         self._commands['start']='self.start(arguments)'
