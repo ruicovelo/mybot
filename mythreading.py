@@ -7,7 +7,7 @@ import logging
 
 class MyThread(Thread):  
     
-    STOP_TIMEOUT_SECS=10.0
+    STOP_TIMEOUT_SECS=3.0
     _processing_function = None
     _queue = None
     
