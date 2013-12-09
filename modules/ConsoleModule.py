@@ -26,8 +26,13 @@ class ConsoleModule(BotModule):
         self._commands['send']='self.send_command(arguments)'
  
     def stop(self,arguments=None):
-        super(ConsoleModule,self).stop()
         # stopping gently
+        if self.out_socket:
+            self.send_command(BotCommand('console','quit','quit',None,None))
+
+        super(ConsoleModule,self).stop()
+        
+
         if self._receive_client_thread and self._receive_client_thread.is_alive():
             self._receive_client_thread.stop()
         if self._receive_controller_thread and self._receive_controller_thread.is_alive():
@@ -102,6 +107,7 @@ class ConsoleModule(BotModule):
             self._receive_client_thread.start()
             self._receive_controller_thread.start()
             
+            # waiting for commands from controller
             while not self.stopping() and self._receive_client_thread.is_alive():
                 try:
                     cmd = self._commands_queue.get(block=True, timeout=5)
@@ -121,6 +127,8 @@ class ConsoleModule(BotModule):
                 
             self._receive_controller_thread.stop()
             self._receive_controller_thread.join(self._receive_controller_thread.STOP_TIMEOUT_SECS)
+            if self.out_socket:
+                self.send_command(BotCommand('console','quit','quit',None,None))
             self.out_socket = None
 
         self.in_socket.close()
