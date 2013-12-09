@@ -63,7 +63,7 @@ class BotModule(object):
         
         # default commands
         self._commands['start']='self.start()'
-        self._commands['stop']='self.stop()'
+        #self._commands['stop']='self.stop()' # for now, stop should only be started by the controller by explicitly calling stop
         
     def _init_process(self):
         self._process = Process()
