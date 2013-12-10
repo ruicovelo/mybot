@@ -55,13 +55,11 @@ class MyBot(object):
         self.log.add_log_file('common.log')
         self.log.debug('Initializing MyBot with PID %d...' % os.getpid())
         
-        
         # Starting the thread that will receive text to process (display/save/send)
         self._receive_outputs_thread = mythreading.ReceiveQueueThread(self.output_text,self._outputs_queue)
         self._receive_outputs_thread.start()
 
         # _receive_command_thread will be handled by main thread !!
-        
         
         self.translator = BotCommandTranslator()
         #TODO: add more controller commands
@@ -78,14 +76,13 @@ class MyBot(object):
                 
     
     def _SIGTERM(self,signum,frame):
-        self.log.debug('SIGTERM received!' % signum)
         self.shutdown()
 
     def _SIGQUIT(self,signum,frame):
-        sys.exit()
+        self.shutdown()
         
     def _SIGINT(self,signum,frame):
-        sys.exit()
+        self.shutdown()
 
     # COMMANDS
     def start(self,arguments=None):
@@ -112,15 +109,28 @@ class MyBot(object):
                     #TODO: check if instance really stopped
                     
     def shutdown(self,arguments=None):
+        if self._shuttingdown:
+            return
         self._shuttingdown = True
-        self.output_text('Shutting down...')
+        self.output_text('Controller shutting down...')
         
         # Shutting down instances of modules
         instances = self._modules.get_instances()
         for instance_name in instances:
-            if instances[instance_name].running():
-                instances[instance_name].stop()
-        #TODO: join
+            instance = self._modules.get_instance(instance_name)
+            if instance.running():
+                instance.stop()
+                
+        for instance_name in instances:
+            instance = self._modules.get_instance(instance_name)
+            if instance.is_alive():
+                self.log.info('Waiting for %s to stop...' % instance_name)
+                instance.join(self._THREAD_TIMEOUT_SECS)
+                if instance.is_alive():
+                    self.log.info('%s taking too long to stop. Terminating...' % instance_name)
+                    instance.terminate()
+                    instance.join(self._THREAD_TIMEOUT_SECS)
+                    self.log.error('%s still not dead!' % instance_name)
         
         if self._receive_outputs_thread:
             self._receive_outputs_thread.stop()
@@ -192,10 +202,11 @@ class MyBot(object):
             try:
                 s = self._commands_queue.get(block=True, timeout=3)
             except Empty:
+                # Timeout 
                 continue
             except IOError, e:
                 if e.errno == 4:
-                    # This will happen if we SIGTERM the main process
+                    # This will happen if we SIGTERM out of Queue.get and we don't care
                     return
                 raise(e)
             self.execute_command(s)
