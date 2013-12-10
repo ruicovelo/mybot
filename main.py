@@ -1,7 +1,10 @@
 import sys
+import os
+import signal
 import logging
 from ConfigParser import ConfigParser   
 from multiprocessing import Queue
+from Queue import Empty
 import mythreading
 from mylogging import MyLogger
 
@@ -26,10 +29,12 @@ class MyBot(object):
     _shuttingdown = False
     
     _THREAD_TIMEOUT_SECS = 5.0
-    _receive_commands_thread = None     # waits for commands from running modules
     _receive_outputs_thread = None      # waits for outputs from running modules
     
     def __init__(self):
+        signal.signal(signal.SIGTERM,self._SIGTERM)
+        signal.signal(signal.SIGQUIT,self._SIGQUIT)
+        signal.signal(signal.SIGINT,self._SIGINT)
         config_parser = ConfigParser()
         config_file_path = 'MyBot.cfg'
         config_parser.read(config_file_path)
@@ -48,15 +53,14 @@ class MyBot(object):
         self.log = logging.getLogger(self.name)
         self.log.setLevel(int(configuration_values['LogLevel']))
         self.log.add_log_file('common.log')
-        self.log.debug('Initializing MyBot...')
+        self.log.debug('Initializing MyBot with PID %d...' % os.getpid())
         
-        # Starting the thread that will receive commands in the background set from modules
-        self._receive_commands_thread = mythreading.ReceiveQueueThread(self.execute_command,self._commands_queue)
-        self._receive_commands_thread.start()
         
         # Starting the thread that will receive text to process (display/save/send)
         self._receive_outputs_thread = mythreading.ReceiveQueueThread(self.output_text,self._outputs_queue)
         self._receive_outputs_thread.start()
+
+        # _receive_command_thread will be handled by main thread !!
         
         
         self.translator = BotCommandTranslator()
@@ -70,10 +74,18 @@ class MyBot(object):
         
         # Loading modules and starting instances configured for auto start
         self._modules = BotModules(self._MODULE_PATH)
-        instances = self._modules.get_instances()
-        for instance_name in instances:
-            if instances[instance_name].running():
-                self.start([instance_name])
+
+                
+    
+    def _SIGTERM(self,signum,frame):
+        self.log.debug('SIGTERM received!' % signum)
+        self.shutdown()
+
+    def _SIGQUIT(self,signum,frame):
+        sys.exit()
+        
+    def _SIGINT(self,signum,frame):
+        sys.exit()
 
     # COMMANDS
     def start(self,arguments=None):
@@ -110,23 +122,15 @@ class MyBot(object):
                 instances[instance_name].stop()
         #TODO: join
         
-        self._receive_commands_thread.stop()
- 
         if self._receive_outputs_thread:
             self._receive_outputs_thread.stop()
  
         self._receive_outputs_thread.join(self._THREAD_TIMEOUT_SECS)
-        #TODO: FIX this - cannot join current thread - this code is executed by the receive_commands_thread
-        #self._receive_commands_thread.join(self._THREAD_TIMEOUT_SECS)   
  
         #TODO: not sure if this is necessary
         if self._receive_outputs_thread.is_alive():
             self.log.error('Receive outputs thread is taking too long to close...')
-        self.log.debug('Outputs thread closed.')
-   
-        if self._receive_commands_thread.is_alive():
-            self.log.error('Receive commands thread is taking too long to close...')
-        self.log.debug('Receive commands thread closed.')
+        self.log.debug('Outputs thread closed.')   
         logging.shutdown()
         
 
@@ -179,13 +183,27 @@ class MyBot(object):
         else:
             self.output_text('Unknown command: %s' % command_line)
        
-
+    def run(self):
+        instances = self._modules.get_instances()
+        for instance_name in instances:
+            if instances[instance_name].running():
+                self.start([instance_name])        
+        while True:
+            try:
+                s = self._commands_queue.get(block=True, timeout=3)
+            except Empty:
+                continue
+            except IOError, e:
+                if e.errno == 4:
+                    # This will happen if we SIGTERM the main process
+                    return
+                raise(e)
+            self.execute_command(s)
 
 
 logging.setLoggerClass(MyLogger)
 bot=MyBot()
+bot.run()
+print('Main thread exiting...')
 
-# main thread will exit now
-# receive_commands_thread keeps this alive
-#TODO:  have main thread handle commands instead ?
 
