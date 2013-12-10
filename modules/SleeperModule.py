@@ -22,12 +22,10 @@ class SleeperModule(BotModule):
         for arg in self._default_args:
             if not self.parameters.has_key(arg):
                 self.parameters[arg] = self._default_args[arg]    
-        self.log.debug(parameters)
         self._seconds = int(self.parameters['seconds']) 
         self._randomize = self._string_to_bool(self.parameters['randomize'])
         if self._randomize:
             random.seed()
-        self.log.debug('Initialization complete.')
     
     def stop(self):
         self.terminate()
