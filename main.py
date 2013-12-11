@@ -128,16 +128,16 @@ class MyBot(object):
             if instance.running():
                 instance.stop()
                 
-        for instance_name in instances:
-            instance = self._modules.get_instance(instance_name)
+        for instance in instances.values():
             if instance.is_alive():
                 self.log.info('Waiting for %s to stop...' % instance_name)
-                instance.join(self._THREAD_TIMEOUT_SECS)
+                instance.join(self._THREAD_TIMEOUT_SECS*2)
                 if instance.is_alive():
-                    self.log.info('%s taking too long to stop. Terminating...' % instance_name)
+                    self.log.info('%s taking too long to stop. Killing...' % instance_name)
                     instance.kill()
-                    instance.join(self._THREAD_TIMEOUT_SECS)
-                    self.log.error('%s still not dead!' % instance_name)
+                    instance.join(self._THREAD_TIMEOUT_SECS*2)
+                    if instance.is_alive():
+                        self.log.error('%s still not dead!' % instance_name)
         
         if self._receive_outputs_thread:
             self._receive_outputs_thread.stop()
