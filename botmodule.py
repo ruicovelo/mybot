@@ -91,7 +91,7 @@ class BotModule(object):
         #TODO: change Thread to MyThread (stoppable thread)
         self._work_thread = Thread(target=self._do_work)
         self._process.start()
-        self.log.debug('Starting with pid %d... ' % self._process.pid())
+        self.log.debug('Starting with pid %d... ' % self._process.pid)
         
     def _forced_stop(self,signum,frame):
         self.log.debug('Stopping NOW %s ' % self.name)
