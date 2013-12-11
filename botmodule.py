@@ -76,7 +76,7 @@ class BotModule(object):
         pass
     
     def run(self):     
-        signal.signal(signal.SIGTERM,self.stop())   # by default if we get a SIGTERM we will try to stop smoothly
+        signal.signal(signal.SIGTERM,self.stop)   # by default if we get a SIGTERM we will try to stop smoothly
 
     def status(self,arguments=None):
         if self._run.value == True and self._process.is_alive():
