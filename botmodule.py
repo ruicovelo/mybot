@@ -8,6 +8,7 @@ from ConfigParser import ConfigParser
 
 # Exchanging objects between processes
 from multiprocessing import Queue
+from Queue import Empty
 
 # Synchronization between processes
 from multiprocessing import Lock 
@@ -50,7 +51,6 @@ class BotModule(object):
     # for background working while main thread receives commands i.e.
     _work_thread = None
     def __init__(self,name,parameters):
-        signal.signal(signal.SIGTERM,self._forced_stop)
         self.log = logging.getLogger(name)
         self.name = name
         self.parameters=parameters
@@ -59,7 +59,6 @@ class BotModule(object):
         else:
             self._run = Value('b',False,lock=False)
         self._commands_queue = Queue()    
-        self.log.debug('Module named "%s" initiating...' % self.name)
         
         # default commands
         self._commands['start']='self.start()'
@@ -76,9 +75,8 @@ class BotModule(object):
         self.log.debug('Not doing the right work...')
         pass
     
-    def run(self):
-        self.log.debug('This function should be overriden')
-        pass
+    def run(self):     
+        signal.signal(signal.SIGTERM,self.stop())   # by default if we get a SIGTERM we will try to stop smoothly
 
     def status(self,arguments=None):
         if self._run.value == True and self._process.is_alive():
@@ -92,21 +90,33 @@ class BotModule(object):
         self._run.value=True
         #TODO: change Thread to MyThread (stoppable thread)
         self._work_thread = Thread(target=self._do_work)
-        #super(BotModule,self).start()
         self._process.start()
-      
+        self.log.debug('Starting with pid %d... ' % self._process.pid())
+        
     def _forced_stop(self,signum,frame):
         self.log.debug('Stopping NOW %s ' % self.name)
         sys.exit()  
     
-    def force_stop(self):
+    def force_stop(self): #TODO: untested
         self._process.terminate()
+        
+    def kill(self): #TODO: untested
+        os.kill(self._process.pid(), 9)
     
     def terminate(self):
         self._process.terminate()
+    
+    def join(self,timeout):
+        self._process.join(timeout)
+    
+    def is_alive(self):
+        if self._process:
+            return self._process.is_alive()
+        else:
+            return False
         
     # Tell module to stop as soon as possible (module has to check the _run flag)
-    # This method should be overriden if the module can stop at any time with a SIGTERM signal
+    # This method should be overridden if the module can stop at any time with a SIGTERM signal
     # In that case call force_stop instead.
     def stop(self,arguments=None):
         self.log.debug('Stopping %s ...' % self.name)
@@ -122,15 +132,17 @@ class BotModule(object):
         ''' Add command to the queue of commands to process in order '''
         self.log.debug('Adding command to queue\n %s' % command.tostring())
         self._commands_queue.put(obj=command, block=True, timeout=timeout)
- 
-    def _get_command_available(self):
-        command = None
-        if not self._commands_queue.empty():
-            command = self._commands_queue.get_nowait()
-        return command
     
     def _wait_next_command_available(self,timeout=None):
-        return self._commands_queue.get(True, timeout)
+        try:
+            command = self._commands_queue.get(True, timeout)
+            return command
+        except Empty:
+            return False
+        except IOError, e:
+            if e.errno == 4:
+                return False
+            raise(e)
         
     def set_output_queue(self,q):
         self._output_queue = q
@@ -238,7 +250,7 @@ class BotModules(object):
             return loaded_module
         except Exception as e:
             self.log.error('Unable to load module!')
-            self.log.error(str(type(e)) + e.message)
+            self.log.error(str(type(e)) + '\n'+ str(e))
             return False
 
     def initialize_module(self,loaded_module):
