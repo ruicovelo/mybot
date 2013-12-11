@@ -35,6 +35,7 @@ class MyBot(object):
         signal.signal(signal.SIGTERM,self._SIGTERM)
         signal.signal(signal.SIGQUIT,self._SIGQUIT)
         signal.signal(signal.SIGINT,self._SIGINT)
+        signal.signal(signal.SIGCHLD,self.child_death)
         config_parser = ConfigParser()
         config_file_path = 'MyBot.cfg'
         config_parser.read(config_file_path)
@@ -59,8 +60,6 @@ class MyBot(object):
         self._receive_outputs_thread = mythreading.ReceiveQueueThread(self.output_text,self._outputs_queue)
         self._receive_outputs_thread.start()
 
-        # _receive_command_thread will be handled by main thread !!
-        
         self.translator = BotCommandTranslator()
         #TODO: add more controller commands
         self._commands['quit']='self.shutdown()'
@@ -73,8 +72,6 @@ class MyBot(object):
         # Loading modules and starting instances configured for auto start
         self._modules = BotModules(self._MODULE_PATH)
 
-                
-    
     def _SIGTERM(self,signum,frame):
         self.shutdown()
 
@@ -83,6 +80,16 @@ class MyBot(object):
         
     def _SIGINT(self,signum,frame):
         self.shutdown()
+
+    def child_death(self,signum,frame):
+        (pid,exit_code) = os.wait()
+        instances = self._modules.get_instances().values()
+        for instance in instances:
+            if instance.pid() == pid:
+                if exit_code != 0:
+                    self.log.error('%s crashed with exit code %d' % (instance.name,exit_code))
+                    #TODO: actions? restart? notify?
+                return 
 
     # COMMANDS
     def start(self,arguments=None):
@@ -206,9 +213,10 @@ class MyBot(object):
                 continue
             except IOError, e:
                 if e.errno == 4:
-                    # This will happen if we SIGTERM out of Queue.get and we don't care
-                    return
-                raise(e)
+                    # This will happen if we receive a signal out of Queue.get
+                    continue
+                print(str(e))
+                continue
             self.execute_command(s)
 
 
