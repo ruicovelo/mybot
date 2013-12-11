@@ -27,9 +27,6 @@ class SleeperModule(BotModule):
         if self._randomize:
             random.seed()
     
-    def stop(self):
-        self.terminate()
-         
     def run(self):
         # run until module is terminated
         while self._run.value:
