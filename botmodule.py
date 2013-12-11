@@ -104,8 +104,11 @@ class BotModule(object):
     def force_stop(self): #TODO: untested
         self._process.terminate()
         
-    def kill(self): #TODO: untested
-        os.kill(self._process.pid(), 9)
+    def kill(self):
+        try:
+            os.kill(self._process.pid, signal.SIGKILL)
+        except OSError:
+            pass
     
     def terminate(self):
         self._process.terminate()
