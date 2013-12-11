@@ -36,6 +36,7 @@ class BotModule(object):
     Multitasking within the module should be done with threads.
     '''
     _process = None
+    _last_pid = None
     
     parameters = None               # configured startup parameters
     name = None
@@ -83,6 +84,8 @@ class BotModule(object):
             return "Running"
         else:
             return "Stopped or stopping"  #TODO: better status support
+    def pid(self):
+        return self._last_pid
            
     def start(self,arguments=None):
         #TODO: check if process is running
@@ -92,6 +95,7 @@ class BotModule(object):
         self._work_thread = Thread(target=self._do_work)
         self._process.start()
         self.log.debug('Starting with pid %d... ' % self._process.pid)
+        self._last_pid = self._process.pid
         
     def _forced_stop(self,signum,frame):
         self.log.debug('Stopping NOW %s ' % self.name)
@@ -132,6 +136,12 @@ class BotModule(object):
         ''' Add command to the queue of commands to process in order '''
         self.log.debug('Adding command to queue\n %s' % command.tostring())
         self._commands_queue.put(obj=command, block=True, timeout=timeout)
+        
+    def _get_command_available(self):
+        command = None
+        if not self._commands_queue.empty():
+            command = self._commands_queue.get_nowait()
+        return command
     
     def _wait_next_command_available(self,timeout=None):
         try:
