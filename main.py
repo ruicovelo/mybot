@@ -135,7 +135,7 @@ class MyBot(object):
                 instance.join(self._THREAD_TIMEOUT_SECS)
                 if instance.is_alive():
                     self.log.info('%s taking too long to stop. Terminating...' % instance_name)
-                    instance.terminate()
+                    instance.kill()
                     instance.join(self._THREAD_TIMEOUT_SECS)
                     self.log.error('%s still not dead!' % instance_name)
         
