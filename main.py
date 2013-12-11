@@ -198,7 +198,7 @@ class MyBot(object):
         for instance_name in instances:
             if instances[instance_name].running():
                 self.start([instance_name])        
-        while True:
+        while not self._shuttingdown:
             try:
                 s = self._commands_queue.get(block=True, timeout=3)
             except Empty:
