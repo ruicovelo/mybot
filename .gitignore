@@ -17,3 +17,7 @@ test*
 
 # log files
 *.log
+
+#helper scripts
+kill
+list
