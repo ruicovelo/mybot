@@ -9,8 +9,10 @@ later
 # C extensions
 *.so
 
+# eclipse stuff
 .project
 .pydevproject
+.settings
 
 # test files
 test*
