@@ -29,7 +29,7 @@ class ConsoleReceiveSocketThread(ReceiveSocketThread):
             self.addline(cmd.arguments)
             return
         #TODO: remove quit
-        if cmd.name == 'quit' or cmd.name == 'disconnect':
+        if cmd.name == 'disconnect':
             self.disconnect()
             self.addline('Connection closed')
     
