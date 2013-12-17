@@ -4,7 +4,7 @@ class MyLogger(logging.getLoggerClass()):
     '''
     Wrapper for setting up my default logging configuration
     '''
-    _FORMAT = "%(asctime)s %(name)s %(levelname)s %(message)s"
+    _FORMAT = "%(asctime)s %(levelname)s: %(name)s %(message)s"
 
     _file_handlers = {}
 
