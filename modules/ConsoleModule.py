@@ -127,10 +127,9 @@ class ConsoleModule(BotModule):
                     continue
                 except IOError,e:
                     if e.errno == 4:
-                        return
+                        continue
             self._console_thread.stop()
             self._receive_controller_thread.stop()
             self._console_thread.join(self._console_thread.STOP_TIMEOUT_SECS)
             self._receive_controller_thread.join(self._receive_controller_thread.STOP_TIMEOUT_SECS)
-            self.log.debug("Exiting...")
         
