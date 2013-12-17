@@ -62,7 +62,6 @@ class MyBot(object):
 
         self.translator = BotCommandTranslator()
         #TODO: add more controller commands
-        self._commands['quit']='self.shutdown()'
         self._commands['shutdown']='self.shutdown()'
         self._commands['list']='self.list_modules()'
         self._commands['start']='self.start(arguments)'
@@ -89,6 +88,8 @@ class MyBot(object):
                 if exit_code != 0:
                     self.log.error('%s crashed with exit code %d' % (instance.name,exit_code))
                     #TODO: actions? restart? notify?
+                else:
+                    self.log.debug('%s stopped. is_alive() %s' % (instance.name,str(instance.is_alive())))
                 return 
 
     # COMMANDS
@@ -127,21 +128,9 @@ class MyBot(object):
             instance = self._modules.get_instance(instance_name)
             if instance.running():
                 instance.stop()
-                
-        for instance in instances.values():
-            if instance.is_alive():
-                self.log.info('Waiting for %s to stop...' % instance_name)
-                instance.join(self._THREAD_TIMEOUT_SECS*2)
-                if instance.is_alive():
-                    self.log.info('%s taking too long to stop. Killing...' % instance_name)
-                    instance.kill()
-                    instance.join(self._THREAD_TIMEOUT_SECS*2)
-                    if instance.is_alive():
-                        self.log.error('%s still not dead!' % instance_name)
-        
+                        
         if self._receive_outputs_thread:
             self._receive_outputs_thread.stop()
- 
         self._receive_outputs_thread.join(self._THREAD_TIMEOUT_SECS)
  
         #TODO: not sure if this is necessary
