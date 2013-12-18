@@ -27,6 +27,29 @@ import logging
 
 from commandtranslate import BotCommandTranslator
 
+class BotModuleCode(object):
+
+    _instances = None
+        
+    def __init__(self,code):
+        self.code = code
+        self.name = code.__name__
+        self._instances = {}
+    
+    def add_instance(self,instance):
+        assert not self._instances.has_key(instance.name), 'Instance with name %s already exists!' % instance.name
+        self._instances[instance.name]=instance
+        
+    def remove_instance(self,instance_name):
+        assert self._instances.has_key(instance_name), 'Instance with name %s does not exist!' % instance_name
+        del self._instances[instance_name]
+    
+    def file_path(self):
+        return self.code.__file__
+
+    def get_instances(self):
+        return self._instances
+
 class BotModule(object):
     '''
     This should be inherited
@@ -205,13 +228,20 @@ class BotModules(object):
     '''
     
     _MODULE_PATH = None
-    _loaded_modules=[]          # code imported and available for launching instances of the modules
+    _loaded_modules={}          # code imported and available for launching instances of the modules
     _instances={}               # dictionary of available instances of modules (running modules) key=instance name, item=BotModule
 
     def __init__(self,module_path):
         self.log = logging.getLogger('BotModules')
         self._MODULE_PATH = module_path
         self.load_modules()
+        
+    def _add_module(self,loaded_module):
+        if self._loaded_modules.has_key(loaded_module.name):
+            raise Exception('Reloading of existing modules is not yet implemented')
+        else:
+            self._loaded_modules[loaded_module.name]=loaded_module
+            
 
     def _get_available_modules_files(self):
         '''
@@ -258,8 +288,9 @@ class BotModules(object):
         module_name = os.path.splitext(os.path.basename(file_path))[0]
         self.log.info("Importing module '%s' from %s" % (module_name,file_path))
         try:
-            loaded_module = imp.load_source(module_name,file_path)
-            self._loaded_modules.append(loaded_module)
+            loaded_module_code = imp.load_source(module_name,file_path)
+            loaded_module = BotModuleCode(loaded_module_code)
+            self._add_module(loaded_module)
             return loaded_module
         except Exception as e:
             self.log.error('Unable to load module!')
@@ -271,8 +302,8 @@ class BotModules(object):
         Loads configuration parameters from loaded_module configuration file, applies to loaded_module and prepares instances for running.
         '''
         config_parser = ConfigParser()
-        config_file_path = os.path.join(self._MODULE_PATH+loaded_module.__name__+'.cfg')
-        initialization_values = {}
+        config_file_path = os.path.join(self._MODULE_PATH+loaded_module.name+'.cfg')
+        initialization_values = {}      
 
         # by default, we will only run one instance of each module
         self._configuration_defaults={'Instances': 1,'Run': False}
@@ -313,22 +344,25 @@ class BotModules(object):
                 for option in initialization_values.keys():
                     configuration_values[option]=initialization_values[option]
             
-            new_instance = None
             new_instance_name = None
             if configuration_values.has_key('name'):
                 new_instance_name = configuration_values['name']
             else:
-                new_instance_name = loaded_module.__name__
+                new_instance_name = loaded_module.name
             n = 1
             while self._instances.has_key(new_instance_name):
-                new_instance_name = loaded_module.__name__ + str(n)
+                new_instance_name = loaded_module.name + str(n)
                 n = n + 1
-             
-            logger = logging.getLogger(new_instance_name)
-            logger.add_log_file(new_instance_name+'.log')
-            logger.add_log_file('common.log')
-            logger.setLevel(logging.DEBUG)
-            exec('new_instance = loaded_module.%s(name=new_instance_name,parameters=configuration_values)' % (loaded_module.__name__))
-            self._instances[new_instance.name]=new_instance
+            
+            self.create_instance(loaded_module=loaded_module, instance_name=new_instance_name, parameters=configuration_values)
 
-
+    def create_instance(self,loaded_module,instance_name,parameters):
+        new_instance = None
+        logger = logging.getLogger(instance_name)
+        logger.add_log_file(instance_name+'.log')
+        logger.add_log_file('common.log')
+        logger.setLevel(logging.DEBUG)
+        exec('new_instance = loaded_module.code.%s(name=instance_name,parameters=parameters)' % (loaded_module.name))
+        self._instances[instance_name]=new_instance
+        loaded_module.add_instance(new_instance)
+        

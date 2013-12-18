@@ -146,14 +146,15 @@ class MyBot(object):
         return False
 
     def list_modules(self,arguments=None):
-        instances = self._modules.get_instances()
-        if not instances:
-            self.output_text('No instances available!')
-            return
-
-        self.output_text('Available instances of modules:')
-        for instance in instances:
-            self.output_text("%s\t\t%s" % (instance,instances[instance].status()))
+        modules = self._modules.get_modules().values()
+        for module in modules:
+            self.output_text("Instances of %s: " % module.name)
+            instances = module.get_instances()
+            if not instances:
+                self.output_text('** No instances available!')
+                continue
+            for instance in instances:
+                self.output_text("\t%s\t\t%s" % (instance,instances[instance].status()))
     
     def say(self,arguments):
         #TODO: move this to a module
@@ -193,7 +194,8 @@ class MyBot(object):
         instances = self._modules.get_instances()
         for instance_name in instances:
             if instances[instance_name].running():
-                self.start([instance_name])        
+                self.start([instance_name])
+        self.list_modules()
         while not self._shuttingdown:
             try:
                 s = self._commands_queue.get(block=True, timeout=3)
