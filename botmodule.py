@@ -1,7 +1,6 @@
 import os
 import re
 import imp
-from time import sleep
 from glob import glob
 from multiprocessing import Process
 from ConfigParser import ConfigParser   
@@ -10,12 +9,8 @@ from ConfigParser import ConfigParser
 from multiprocessing import Queue
 from Queue import Empty
 
-# Synchronization between processes
-from multiprocessing import Lock 
-
 # Sharing state between processes
 from multiprocessing import Value
-from multiprocessing import Array
 
 from threading import Thread
 
@@ -25,12 +20,8 @@ import sys
 
 import logging
 
-from commandtranslate import BotCommandTranslator
-
 class BotModuleCode(object):
 
-    _instances = None
-        
     def __init__(self,code,file_path):
         self.code = code
         self.name = code.__name__
@@ -56,32 +47,18 @@ class BotModule(object):
     This should be used for creating modules, abstracting the part of managing the process that runs the module.
     Multitasking within the module should be done with threads.
     '''
-    _process = None
-    _last_pid = None
-    
-    parameters = None               # configured startup parameters
-    name = None
-    
-    _run = None                     # set to False to stop module as soon as it checks this value (self._stopping())
-    _commands_queue = None          # queue for receiving asynchronous commands from controller    
-    _commands_output_queue = None   # queue for sending commands to controller
-    _output_text_queue = None       # queue for receiving text from controller
-    _output_queue = None            # queue to output data to controller
-    _receive_output_text = False    # set to True to subscribe to receive text output to stdout
-    _commands = None
-    
-    # for background working while main thread receives commands i.e.
-    _work_thread = None
     def __init__(self,name,parameters):
+        self._last_pid = None
         self.log = logging.getLogger(name)
         self.name = name
         self.parameters=parameters
-        if self.parameters['Run']=='True': #TODO: check other possible values for True (case, yes, 1, ...)
+        if self._string_to_bool(self.parameters['Run']):
             self._run = Value('b',True,lock=False)
         else:
             self._run = Value('b',False,lock=False)
-        self._commands_queue = Queue()
-        self._output_text_queue = Queue()    
+        self._commands_queue = Queue()      # queue for receiving asynchronous commands from controller    
+        self._output_text_queue = Queue()   # queue for receiving text from controller
+        self._receive_output_text = False        # set to True to subscribe to receive text output to stdout 
         
         # default commands
         self._commands={}
@@ -225,16 +202,11 @@ class BotModules(object):
     '''
     A list of BotModules and methods for loading and managing the availability of the modules.
     '''
-    
-    _MODULE_PATH = None
-    _loaded_modules=None          # code imported and available for launching instances of the modules
-    _instances=None               # dictionary of available instances of modules (running modules) key=instance name, item=BotModule
-
     def __init__(self,module_path):
         self.log = logging.getLogger('BotModules')
         self._MODULE_PATH = module_path
-        self._loaded_modules={}
-        self._instances={}
+        self._loaded_modules={}         # code imported and available for launching instances of the modules
+        self._instances={}              # dictionary of available instances of modules (running modules) key=instance name, item=BotModule
         self.load_modules()
         
     def _add_module(self,loaded_module):
@@ -242,7 +214,6 @@ class BotModules(object):
             raise Exception('Reloading of existing modules is not yet implemented')
         else:
             self._loaded_modules[loaded_module.name]=loaded_module
-            
 
     def _get_available_modules_files(self):
         '''

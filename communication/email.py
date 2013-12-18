@@ -16,12 +16,10 @@ class ValueUpdated(object):
     '''
     This classes contains values that have a validity date. Actually, a last updated timestamp.
     This might be interesting for only trying to get a new value when the one we already got is too old.
-    '''
-    _value = None
-    updated = None
-    
+    '''    
     def __init__(self):
-        pass
+        self._value = None
+        self.updated = None
     
     def set_value(self,value,time=time.time()):
         self._value = value
@@ -31,12 +29,6 @@ class ValueUpdated(object):
         return self._value
 
 class EmailMessage(object):
-    
-    fromaddr = None
-    toaddr = None
-    subject = None
-    body = None
-    smtp_server = None
     
     def __init__(self,fromaddr,toaddr,subject='',body='',smtp_server=None):
         self.fromaddr=fromaddr
@@ -49,11 +41,6 @@ class EmailMessage(object):
         self.smtp_server.send_single_message(self)
   
 class SMTPServer(object):
-    
-    _server_address = None
-    _username = None
-    _password = None
-    _server = None
     
     def __init__(self,server_address,username,password):
         self._server_address=server_address
@@ -94,18 +81,17 @@ class SMTPServer(object):
         
 class IMAPServer(object):
     
-    log = None
-    server_address = None
-    folder = 'INBOX'
-    connection = None
-    _messages = ValueUpdated()
-    _new_messages = ValueUpdated()
-    
+    def __init__(self,server_address,username,password,folder='INBOX'):
+        self._server_address=server_address
+        self._username=username
+        self._password=password
+        self.folder = folder
+        self._messages = ValueUpdated()
+        self._new_messages = ValueUpdated()
     
     def get_messages_count(self,force_update=False):
         if force_update:
             self.status()
-            
         return self._messages.get_value()
     
     def get_new_messages_count(self,force_update=True):
@@ -194,12 +180,11 @@ class IMAPServer(object):
         else:
             return False
         
-        
     def connect(self,username,password,server_address=None,folder=None):
         if server_address:
-            self.server_address=server_address
+            self._server_address=server_address
         else:
-            server_address=self.server_address
+            server_address=self._server_address
             
         #TODO: check if there is a more secure way to store passwords/credentials
         if server_address and username and password:

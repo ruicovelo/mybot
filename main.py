@@ -14,28 +14,21 @@ from commandtranslate import BotCommandTranslator
 from botmodule import BotModules
 
 class MyBot(object):
+    
     name = "MyBot"
-    _voice = voice.Voice()
-    
     _MODULE_PATH='modules/'
-    _modules = None
-    _outputs_subscribers = []
-    _outputs_queue = Queue()
-    _commands_queue = Queue()
-    _commands = {}
-
-    translator = None
-    
-    _shuttingdown = False
-    
     _THREAD_TIMEOUT_SECS = 5.0
-    _receive_outputs_thread = None      # waits for outputs from running modules
     
     def __init__(self):
-        signal.signal(signal.SIGTERM,self._SIGTERM)
-        signal.signal(signal.SIGQUIT,self._SIGQUIT)
-        signal.signal(signal.SIGINT,self._SIGINT)
+        signal.signal(signal.SIGTERM,self._stop_signal_handling)
+        signal.signal(signal.SIGQUIT,self._stop_signal_handling)
+        signal.signal(signal.SIGINT,self._stop_signal_handling)
         signal.signal(signal.SIGCHLD,self.child_death)
+        
+        self._outputs_subscribers = []      # instances that want to receive output text from controller
+        self._outputs_queue = Queue()       # queue for text to be output by instances to controller
+        self._commands_queue = Queue()      # queue for commands to be output by instances to controller
+
         config_parser = ConfigParser()
         config_file_path = 'MyBot.cfg'
         config_parser.read(config_file_path)
@@ -62,6 +55,7 @@ class MyBot(object):
 
         self.translator = BotCommandTranslator()
         #TODO: add more controller commands
+        self._commands = {}
         self._commands['shutdown']='self.shutdown()'
         self._commands['list']='self.list_modules()'
         self._commands['start']='self.start(arguments)'
@@ -72,13 +66,7 @@ class MyBot(object):
         # Loading modules and starting instances configured for auto start
         self._modules = BotModules(self._MODULE_PATH)
 
-    def _SIGTERM(self,signum,frame):
-        self.shutdown()
-
-    def _SIGQUIT(self,signum,frame):
-        self.shutdown()
-        
-    def _SIGINT(self,signum,frame):
+    def _stop_signal_handling(self,signum,frame):
         self.shutdown()
 
     def child_death(self,signum,frame):
@@ -191,7 +179,7 @@ class MyBot(object):
         ''' Handle the output of text directing it to the available outputs '''
         sys.stdout.write(text+"\n")
         for o in self._outputs_subscribers:
-            if o:
+            if o: #TODO: review this 'if'
                 o.put(text+"\n")
     
     def execute_command(self,command_line):
@@ -212,6 +200,7 @@ class MyBot(object):
             self.output_text('Unknown command: %s' % command_line)
        
     def run(self):
+        self._shuttingdown = False
         instances = self._modules.get_instances()
         for instance_name in instances:
             if instances[instance_name].running():
