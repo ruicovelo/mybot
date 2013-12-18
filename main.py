@@ -66,6 +66,7 @@ class MyBot(object):
         self._commands['list']='self.list_modules()'
         self._commands['start']='self.start(arguments)'
         self._commands['stop']='self.stop(arguments)'
+        self._commands['reload']='self.reload(arguments)'
         self.translator.add_commands(None,self._commands)
         
         # Loading modules and starting instances configured for auto start
@@ -93,6 +94,25 @@ class MyBot(object):
                 return 
 
     # COMMANDS
+    def reload(self,arguments=None):
+        if arguments:
+            module_name=arguments[0]
+            module = self._modules.get_modules()[module_name]
+            instances = module.get_instances().values()
+            for instance in instances:
+                self.stop(instance.name)
+                self._modules.remove_instance(module, instance.name)
+                #TODO: wait for instances to stop?
+            self.list_modules()
+            del self._modules.get_modules()[module_name]
+            file_path = module.file_path
+            module = None
+            module = self._modules.load_module(file_path)
+            self._modules.initialize_module(module)
+            print('Final')
+            self.list_modules()
+            
+                
     def start(self,arguments=None):
         if arguments:
             instance_name = arguments[0]
@@ -171,7 +191,8 @@ class MyBot(object):
         ''' Handle the output of text directing it to the available outputs '''
         sys.stdout.write(text+"\n")
         for o in self._outputs_subscribers:
-            o.put(text+"\n")
+            if o:
+                o.put(text+"\n")
     
     def execute_command(self,command_line):
         self.log.debug('Translating command line %s' % command_line)
@@ -195,7 +216,6 @@ class MyBot(object):
         for instance_name in instances:
             if instances[instance_name].running():
                 self.start([instance_name])
-        self.list_modules()
         while not self._shuttingdown:
             try:
                 s = self._commands_queue.get(block=True, timeout=3)
