@@ -67,10 +67,10 @@ class BotModule(object):
     _run = None                     # set to False to stop module as soon as it checks this value (self._stopping())
     _commands_queue = None          # queue for receiving asynchronous commands from controller    
     _commands_output_queue = None   # queue for sending commands to controller
-    _output_text_queue = Queue()    # queue for receiving text from controller
+    _output_text_queue = None       # queue for receiving text from controller
     _output_queue = None            # queue to output data to controller
     _receive_output_text = False    # set to True to subscribe to receive text output to stdout
-    _commands = {}
+    _commands = None
     
     # for background working while main thread receives commands i.e.
     _work_thread = None
@@ -85,6 +85,7 @@ class BotModule(object):
         self._commands_queue = Queue()    
         
         # default commands
+        self._commands={}
         self._commands['start']='self.start()'
         #self._commands['stop']='self.stop()' # for now, stop should only be started by the controller by explicitly calling stop
         
@@ -228,12 +229,14 @@ class BotModules(object):
     '''
     
     _MODULE_PATH = None
-    _loaded_modules={}          # code imported and available for launching instances of the modules
-    _instances={}               # dictionary of available instances of modules (running modules) key=instance name, item=BotModule
+    _loaded_modules=None          # code imported and available for launching instances of the modules
+    _instances=None               # dictionary of available instances of modules (running modules) key=instance name, item=BotModule
 
     def __init__(self,module_path):
         self.log = logging.getLogger('BotModules')
         self._MODULE_PATH = module_path
+        self._loaded_modules={}
+        self._instances={}
         self.load_modules()
         
     def _add_module(self,loaded_module):
