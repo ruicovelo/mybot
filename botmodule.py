@@ -82,7 +82,8 @@ class BotModule(object):
             self._run = Value('b',True,lock=False)
         else:
             self._run = Value('b',False,lock=False)
-        self._commands_queue = Queue()    
+        self._commands_queue = Queue()
+        self._output_text_queue = Queue()    
         
         # default commands
         self._commands={}
@@ -222,7 +223,6 @@ class BotModule(object):
         else:
             self.output_text('Unknown command: %s' % command.tostring())    
    
-
 class BotModules(object):
     '''
     A list of BotModules and methods for loading and managing the availability of the modules.
@@ -282,7 +282,7 @@ class BotModules(object):
             loaded_module = self.load_module(file_path)
             if loaded_module:
                 self.initialize_module(loaded_module)
-
+    
     def load_module(self,file_path):
         '''
         Load the code for the module. Should not run any instance of the module!
