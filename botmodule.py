@@ -1,7 +1,6 @@
 import os
 import re
 import imp
-from time import sleep
 from glob import glob
 from multiprocessing import Process
 from ConfigParser import ConfigParser   
@@ -10,12 +9,8 @@ from ConfigParser import ConfigParser
 from multiprocessing import Queue
 from Queue import Empty
 
-# Synchronization between processes
-from multiprocessing import Lock 
-
 # Sharing state between processes
 from multiprocessing import Value
-from multiprocessing import Array
 
 from threading import Thread
 
@@ -25,7 +20,24 @@ import sys
 
 import logging
 
-from commandtranslate import BotCommandTranslator
+class BotModuleCode(object):
+
+    def __init__(self,code,file_path):
+        self.code = code
+        self.name = code.__name__
+        self._instances = {}
+        self.file_path = file_path
+    
+    def add_instance(self,instance):
+        assert not self._instances.has_key(instance.name), 'Instance with name %s already exists!' % instance.name
+        self._instances[instance.name]=instance
+        
+    def remove_instance(self,instance_name):
+        assert self._instances.has_key(instance_name), 'Instance with name %s does not exist!' % instance_name
+        del self._instances[instance_name]
+    
+    def get_instances(self):
+        return self._instances
 
 class BotModule(object):
     '''
@@ -35,32 +47,21 @@ class BotModule(object):
     This should be used for creating modules, abstracting the part of managing the process that runs the module.
     Multitasking within the module should be done with threads.
     '''
-    _process = None
-    
-    parameters = None               # configured startup parameters
-    name = None
-    
-    _run = None                     # set to False to stop module as soon as it checks this value (self._stopping())
-    _commands_queue = None          # queue for receiving asynchronous commands from controller    
-    _commands_output_queue = None   # queue for sending commands to controller
-    _output_text_queue = Queue()    # queue for receiving text from controller
-    _output_queue = None            # queue to output data to controller
-    _receive_output_text = False    # set to True to subscribe to receive text output to stdout
-    _commands = {}
-    
-    # for background working while main thread receives commands i.e.
-    _work_thread = None
     def __init__(self,name,parameters):
+        self._last_pid = None
         self.log = logging.getLogger(name)
         self.name = name
         self.parameters=parameters
-        if self.parameters['Run']=='True': #TODO: check other possible values for True (case, yes, 1, ...)
+        if self._string_to_bool(self.parameters['Run']):
             self._run = Value('b',True,lock=False)
         else:
             self._run = Value('b',False,lock=False)
-        self._commands_queue = Queue()    
+        self._commands_queue = Queue()      # queue for receiving asynchronous commands from controller    
+        self._output_text_queue = Queue()   # queue for receiving text from controller
+        self._receive_output_text = False        # set to True to subscribe to receive text output to stdout 
         
         # default commands
+        self._commands={}
         self._commands['start']='self.start()'
         #self._commands['stop']='self.stop()' # for now, stop should only be started by the controller by explicitly calling stop
         
@@ -79,10 +80,12 @@ class BotModule(object):
         signal.signal(signal.SIGTERM,self.stop)   # by default if we get a SIGTERM we will try to stop smoothly
 
     def status(self,arguments=None):
-        if self._run.value == True and self._process.is_alive():
+        if self._run.value == True and self._process and self._process.is_alive():
             return "Running"
         else:
             return "Stopped or stopping"  #TODO: better status support
+    def pid(self):
+        return self._last_pid
            
     def start(self,arguments=None):
         #TODO: check if process is running
@@ -92,6 +95,7 @@ class BotModule(object):
         self._work_thread = Thread(target=self._do_work)
         self._process.start()
         self.log.debug('Starting with pid %d... ' % self._process.pid)
+        self._last_pid = self._process.pid
         
     def _forced_stop(self,signum,frame):
         self.log.debug('Stopping NOW %s ' % self.name)
@@ -100,8 +104,11 @@ class BotModule(object):
     def force_stop(self): #TODO: untested
         self._process.terminate()
         
-    def kill(self): #TODO: untested
-        os.kill(self._process.pid(), 9)
+    def kill(self):
+        try:
+            os.kill(self._process.pid, signal.SIGKILL)
+        except OSError:
+            pass
     
     def terminate(self):
         self._process.terminate()
@@ -132,6 +139,12 @@ class BotModule(object):
         ''' Add command to the queue of commands to process in order '''
         self.log.debug('Adding command to queue\n %s' % command.tostring())
         self._commands_queue.put(obj=command, block=True, timeout=timeout)
+        
+    def _get_command_available(self):
+        command = None
+        if not self._commands_queue.empty():
+            command = self._commands_queue.get_nowait()
+        return command
     
     def _wait_next_command_available(self,timeout=None):
         try:
@@ -185,20 +198,22 @@ class BotModule(object):
         else:
             self.output_text('Unknown command: %s' % command.tostring())    
    
-
 class BotModules(object):
     '''
     A list of BotModules and methods for loading and managing the availability of the modules.
     '''
-    
-    _MODULE_PATH = None
-    _loaded_modules=[]          # code imported and available for launching instances of the modules
-    _instances={}               # dictionary of available instances of modules (running modules) key=instance name, item=BotModule
-
     def __init__(self,module_path):
         self.log = logging.getLogger('BotModules')
         self._MODULE_PATH = module_path
+        self._loaded_modules={}         # code imported and available for launching instances of the modules
+        self._instances={}              # dictionary of available instances of modules (running modules) key=instance name, item=BotModule
         self.load_modules()
+        
+    def _add_module(self,loaded_module):
+        if self._loaded_modules.has_key(loaded_module.name):
+            raise Exception('Reloading of existing modules is not yet implemented')
+        else:
+            self._loaded_modules[loaded_module.name]=loaded_module
 
     def _get_available_modules_files(self):
         '''
@@ -236,7 +251,7 @@ class BotModules(object):
             loaded_module = self.load_module(file_path)
             if loaded_module:
                 self.initialize_module(loaded_module)
-
+    
     def load_module(self,file_path):
         '''
         Load the code for the module. Should not run any instance of the module!
@@ -245,8 +260,9 @@ class BotModules(object):
         module_name = os.path.splitext(os.path.basename(file_path))[0]
         self.log.info("Importing module '%s' from %s" % (module_name,file_path))
         try:
-            loaded_module = imp.load_source(module_name,file_path)
-            self._loaded_modules.append(loaded_module)
+            loaded_module_code = imp.load_source(module_name,file_path)
+            loaded_module = BotModuleCode(loaded_module_code,file_path)
+            self._add_module(loaded_module)
             return loaded_module
         except Exception as e:
             self.log.error('Unable to load module!')
@@ -258,8 +274,8 @@ class BotModules(object):
         Loads configuration parameters from loaded_module configuration file, applies to loaded_module and prepares instances for running.
         '''
         config_parser = ConfigParser()
-        config_file_path = os.path.join(self._MODULE_PATH+loaded_module.__name__+'.cfg')
-        initialization_values = {}
+        config_file_path = os.path.join(self._MODULE_PATH+loaded_module.name+'.cfg')
+        initialization_values = {}      
 
         # by default, we will only run one instance of each module
         self._configuration_defaults={'Instances': 1,'Run': False}
@@ -300,22 +316,29 @@ class BotModules(object):
                 for option in initialization_values.keys():
                     configuration_values[option]=initialization_values[option]
             
-            new_instance = None
             new_instance_name = None
             if configuration_values.has_key('name'):
                 new_instance_name = configuration_values['name']
             else:
-                new_instance_name = loaded_module.__name__
+                new_instance_name = loaded_module.name
             n = 1
             while self._instances.has_key(new_instance_name):
-                new_instance_name = loaded_module.__name__ + str(n)
+                new_instance_name = loaded_module.name + str(n)
                 n = n + 1
-             
-            logger = logging.getLogger(new_instance_name)
-            logger.add_log_file(new_instance_name+'.log')
-            logger.add_log_file('common.log')
-            logger.setLevel(logging.DEBUG)
-            exec('new_instance = loaded_module.%s(name=new_instance_name,parameters=configuration_values)' % (loaded_module.__name__))
-            self._instances[new_instance.name]=new_instance
+            
+            self.create_instance(loaded_module=loaded_module, instance_name=new_instance_name, parameters=configuration_values)
 
-
+    def create_instance(self,loaded_module,instance_name,parameters):
+        new_instance = None
+        logger = logging.getLogger(instance_name)
+        logger.add_log_file(instance_name+'.log')
+        logger.add_log_file('common.log')
+        logger.setLevel(logging.DEBUG)
+        exec('new_instance = loaded_module.code.%s(name=instance_name,parameters=parameters)' % (loaded_module.name))
+        self._instances[instance_name]=new_instance
+        loaded_module.add_instance(new_instance)
+        
+    def remove_instance(self,loaded_module,instance_name):
+        assert self._instances.has_key(instance_name), 'Instance with name %s does not exist!' % instance_name
+        del self._instances[instance_name]
+        loaded_module.remove_instance(instance_name)

@@ -10,9 +10,6 @@ from commandtranslate import BotCommand
 
 class ConsoleThread(ReceiveSocketThread):
     
-    in_socket = None
-    out_socket = None
-    
     def __init__(self,processing_function,log,in_socket_path,out_socket_path):
         super(ConsoleThread,self).__init__(processing_function=processing_function,connection=None)
         self.log = log
@@ -67,15 +64,10 @@ class ConsoleThread(ReceiveSocketThread):
         if self.out_socket:
             self.send_command(BotCommand('console','quit','quit',None,None))
         super(ConsoleThread,self).stop()
-
-        
         
 class ConsoleModule(BotModule):
     
     _default_args = {'in_socket_path':'in_console_socket','out_socket_path':'out_console_socket'}
-    _receive_client_thread = None
-    _receive_controller_thread = None
-    _console_thread = None
 
     def __init__(self,name='console',parameters={}):
         super(ConsoleModule,self).__init__(name=name,parameters=parameters)
@@ -127,10 +119,9 @@ class ConsoleModule(BotModule):
                     continue
                 except IOError,e:
                     if e.errno == 4:
-                        return
+                        continue
             self._console_thread.stop()
             self._receive_controller_thread.stop()
             self._console_thread.join(self._console_thread.STOP_TIMEOUT_SECS)
             self._receive_controller_thread.join(self._receive_controller_thread.STOP_TIMEOUT_SECS)
-            self.log.debug("Exiting...")
         

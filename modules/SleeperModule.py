@@ -13,8 +13,6 @@ import random
 
 class SleeperModule(BotModule):
 
-    _seconds = None
-    _randomize = False
     _default_args = {'seconds':5,'randomize':False}
     
     def __init__(self,name='sleeper',parameters={}):
@@ -27,10 +25,8 @@ class SleeperModule(BotModule):
         if self._randomize:
             random.seed()
     
-    def stop(self):
-        self.terminate()
-         
     def run(self):
+        super(SleeperModule,self).run()
         # run until module is terminated
         while self._run.value:
             if self._randomize:
