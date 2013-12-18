@@ -31,10 +31,11 @@ class BotModuleCode(object):
 
     _instances = None
         
-    def __init__(self,code):
+    def __init__(self,code,file_path):
         self.code = code
         self.name = code.__name__
         self._instances = {}
+        self.file_path = file_path
     
     def add_instance(self,instance):
         assert not self._instances.has_key(instance.name), 'Instance with name %s already exists!' % instance.name
@@ -44,9 +45,6 @@ class BotModuleCode(object):
         assert self._instances.has_key(instance_name), 'Instance with name %s does not exist!' % instance_name
         del self._instances[instance_name]
     
-    def file_path(self):
-        return self.code.__file__
-
     def get_instances(self):
         return self._instances
 
@@ -105,7 +103,7 @@ class BotModule(object):
         signal.signal(signal.SIGTERM,self.stop)   # by default if we get a SIGTERM we will try to stop smoothly
 
     def status(self,arguments=None):
-        if self._run.value == True and self._process.is_alive():
+        if self._run.value == True and self._process and self._process.is_alive():
             return "Running"
         else:
             return "Stopped or stopping"  #TODO: better status support
@@ -292,7 +290,7 @@ class BotModules(object):
         self.log.info("Importing module '%s' from %s" % (module_name,file_path))
         try:
             loaded_module_code = imp.load_source(module_name,file_path)
-            loaded_module = BotModuleCode(loaded_module_code)
+            loaded_module = BotModuleCode(loaded_module_code,file_path)
             self._add_module(loaded_module)
             return loaded_module
         except Exception as e:
@@ -369,3 +367,7 @@ class BotModules(object):
         self._instances[instance_name]=new_instance
         loaded_module.add_instance(new_instance)
         
+    def remove_instance(self,loaded_module,instance_name):
+        assert self._instances.has_key(instance_name), 'Instance with name %s does not exist!' % instance_name
+        del self._instances[instance_name]
+        loaded_module.remove_instance(instance_name)
