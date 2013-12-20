@@ -48,6 +48,7 @@ class BotModule(object):
     Multitasking within the module should be done with threads.
     '''
     def __init__(self,name,parameters):
+        self._process = None
         self._last_pid = None
         self.log = logging.getLogger(name)
         self.name = name
@@ -88,29 +89,36 @@ class BotModule(object):
         return self._last_pid
            
     def start(self,arguments=None):
-        #TODO: check if process is running
-        self._init_process()
-        self._run.value=True
-        #TODO: change Thread to MyThread (stoppable thread)
-        self._work_thread = Thread(target=self._do_work)
-        self._process.start()
-        self.log.debug('Starting with pid %d... ' % self._process.pid)
-        self._last_pid = self._process.pid
+        try:
+            #TODO: check if process is running
+            self._init_process()
+            self._run.value=True
+            #TODO: change Thread to MyThread (stoppable thread)
+            self._work_thread = Thread(target=self._do_work)
+            self._process.start()
+            self.log.debug('Starting with pid %d... ' % self._process.pid)
+            self._last_pid = self._process.pid
+            return True
+        except:
+            return False
         
     def _forced_stop(self,signum,frame):
         self.log.debug('Stopping NOW %s ' % self.name)
         sys.exit()  
     
     def force_stop(self): #TODO: untested
+        self.log.debug('%d force stopping %d!' % (os.getpid(),self._process.pid))
         self._process.terminate()
         
     def kill(self):
+        self.log.debug('%d killing %d!' % (os.getpid(),self._process.pid))
         try:
             os.kill(self._process.pid, signal.SIGKILL)
         except OSError:
             pass
     
     def terminate(self):
+        self.log.debug('%d terminating %d!' % (os.getpid(),self._process.pid))
         self._process.terminate()
     
     def join(self,timeout):
@@ -126,7 +134,7 @@ class BotModule(object):
     # This method should be overridden if the module can stop at any time with a SIGTERM signal
     # In that case call force_stop instead.
     def stop(self,arguments=None):
-        self.log.debug('Stopping %s ...' % self.name)
+        self.log.debug('%d stopping %d %s!' % (os.getpid(),self._process.pid,self.name))
         self._run.value=False
                
     def stopping(self):
@@ -205,10 +213,11 @@ class BotModules(object):
     def __init__(self,module_path):
         self.log = logging.getLogger('BotModules')
         self._MODULE_PATH = module_path
-        self._loaded_modules={}         # code imported and available for launching instances of the modules
-        self._instances={}              # dictionary of available instances of modules (running modules) key=instance name, item=BotModule
+        self._loaded_modules={}         # code imported and available for launching instances of the modules (not runnable)
+        self._instances={}              # dictionary of available instances of modules (runnable) key=instance name, item=BotModule
+        self._running_instances = {}                 # workaround to keep child processes accounted for
         self.load_modules()
-        
+
     def _add_module(self,loaded_module):
         if self._loaded_modules.has_key(loaded_module.name):
             raise Exception('Reloading of existing modules is not yet implemented')
@@ -239,7 +248,19 @@ class BotModules(object):
         try:
             return self._instances[instance_name]
         except KeyError:
-            return None        
+            return None
+        
+    def add_running_instance(self,instance):
+        self._running_instances[instance.pid()]=instance
+        
+    def remove_running_instance(self,pid):
+        del self._running_instances[pid]
+        
+    def get_running_instance(self,pid):
+        return self._running_instances[pid]
+    
+    def get_running_instances(self):
+        return self._running_instances
 
     def load_modules(self):
         '''

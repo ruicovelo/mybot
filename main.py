@@ -9,7 +9,6 @@ import mythreading
 from mylogging import MyLogger
 
 # My modules
-from communication import voice
 from commandtranslate import BotCommandTranslator
 from botmodule import BotModules
 
@@ -23,31 +22,13 @@ class MyBot(object):
         signal.signal(signal.SIGTERM,self._stop_signal_handling)
         signal.signal(signal.SIGQUIT,self._stop_signal_handling)
         signal.signal(signal.SIGINT,self._stop_signal_handling)
-        signal.signal(signal.SIGCHLD,self.child_death)
+        signal.signal(signal.SIGCHLD,self._child_death)
+     
         
         self._outputs_subscribers = []      # instances that want to receive output text from controller
         self._outputs_queue = Queue()       # queue for text to be output by instances to controller
         self._commands_queue = Queue()      # queue for commands to be output by instances to controller
-
-        config_parser = ConfigParser()
-        config_file_path = 'MyBot.cfg'
-        config_parser.read(config_file_path)
-        configuration_values={'LogLevel': logging.DEBUG}         # set default values here
-        if not config_parser.has_section('Initialization'):
-            config_parser.add_section('Initialization')
-            
-        for default in configuration_values:
-            if config_parser.has_option('Initialization', default):
-                configuration_values[default] = config_parser.get('Initialization', default)
-            else:
-                config_parser.set('Initialization', default, configuration_values[default])
-        
-        config_parser.write(open(config_file_path,"w"))
-
-        self.log = logging.getLogger(self.name)
-        self.log.setLevel(int(configuration_values['LogLevel']))
-        self.log.add_log_file('common.log')
-        self.log.debug('Initializing MyBot with PID %d...' % os.getpid())
+        self._config()
         
         # Starting the thread that will receive text to process (display/save/send)
         self._receive_outputs_thread = mythreading.ReceiveQueueThread(self.output_text,self._outputs_queue)
@@ -66,20 +47,42 @@ class MyBot(object):
         # Loading modules and starting instances configured for auto start
         self._modules = BotModules(self._MODULE_PATH)
 
+    def _config(self):
+        config_parser = ConfigParser()
+        config_file_path = 'MyBot.cfg' #TODO: set this elsewhere
+        config_parser.read(config_file_path)
+        configuration_values={'LogLevel': logging.DEBUG}         # set default values here
+        if not config_parser.has_section('Initialization'):
+            config_parser.add_section('Initialization')
+            
+        for default in configuration_values:
+            if config_parser.has_option('Initialization', default):
+                configuration_values[default] = config_parser.get('Initialization', default)
+            else:
+                config_parser.set('Initialization', default, configuration_values[default])
+        
+        config_parser.write(open(config_file_path,"w"))
+        self.log = logging.getLogger(self.name)
+        self.log.setLevel(int(configuration_values['LogLevel']))
+        self.log.add_log_file('common.log')
+        self.log.debug('Initializing MyBot with PID %d...' % os.getpid())
+        
+    def _child_death(self,signum,frame):
+        (pid,exit_code) = os.wait()
+        try:
+            instance = self._modules.get_running_instance(pid)
+            self._modules.remove_running_instance(pid)
+        except ValueError:
+            self.log.error('Not a running instance?')
+            return
+        if exit_code != 0:
+            self.log.error('%s crashed with exit code %d' % (instance.name,exit_code))
+            #TODO: actions? restart? notify?
+        else:
+            self.log.debug('%s stopped.' % (instance.name))
+
     def _stop_signal_handling(self,signum,frame):
         self.shutdown()
-
-    def child_death(self,signum,frame):
-        (pid,exit_code) = os.wait()
-        instances = self._modules.get_instances().values()
-        for instance in instances:
-            if instance.pid() == pid:
-                if exit_code != 0:
-                    self.log.error('%s crashed with exit code %d' % (instance.name,exit_code))
-                    #TODO: actions? restart? notify?
-                else:
-                    self.log.debug('%s stopped. is_alive() %s' % (instance.name,str(instance.is_alive())))
-                return 
 
     # COMMANDS
     def reload(self,arguments=None):
@@ -99,7 +102,6 @@ class MyBot(object):
             self._modules.initialize_module(module)
             print('Final')
             self.list_modules()
-            
                 
     def start(self,arguments=None):
         if arguments:
@@ -111,7 +113,8 @@ class MyBot(object):
                 instance.set_output_queue(self._outputs_queue)
                 instance.check_outputs_subscriber(self._outputs_subscribers)
                 instance.set_output_commands_queue(self._commands_queue)
-                instance.start()
+                if instance.start():
+                    self._modules.add_running_instance(instance)
             else:
                 self.log.error('Instance not known: %s' % instance_name)                              
                 
@@ -155,32 +158,29 @@ class MyBot(object):
 
     def list_modules(self,arguments=None):
         modules = self._modules.get_modules().values()
+        running_instances = self._modules.get_running_instances()
         for module in modules:
             self.output_text("Instances of %s: " % module.name)
             instances = module.get_instances()
             if not instances:
                 self.output_text('** No instances available!')
                 continue
-            for instance in instances:
-                self.output_text("\t%s\t\t%s" % (instance,instances[instance].status()))
-    
-    def say(self,arguments):
-        #TODO: move this to a module
-        if not self._voice.speak(arguments):
-            print("Don't have voice?!")
-  
-    def status(self):
-        self.output_text("Name: %s" % self.name)
-  
+            for instance in instances.values():
+                if running_instances.has_key(instance.pid()):
+                    status = 'Running with PID %d ' % instance.pid()
+                else:
+                    status = 'Stopped'
+                self.output_text("\t%s\t\t%s" % (instance.name,status))
+ 
     # EO COMMANDS /
     
                 
     def output_text(self,text):
         ''' Handle the output of text directing it to the available outputs '''
-        sys.stdout.write(text+"\n")
+        sys.stdout.write(str(text)+"\n")
         for o in self._outputs_subscribers:
             if o: #TODO: review this 'if'
-                o.put(text+"\n")
+                o.put(str(text)+"\n")
     
     def execute_command(self,command_line):
         self.log.debug('Translating command line %s' % command_line)
@@ -222,7 +222,11 @@ class MyBot(object):
 
 logging.setLoggerClass(MyLogger)
 bot=MyBot()
-bot.run()
+try:
+    bot.run()
+except Exception,e:
+    bot.shutdown()
+    raise
 print('Main thread exiting...')
 
 
