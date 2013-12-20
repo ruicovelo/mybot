@@ -116,7 +116,7 @@ class MyBot(object):
                 if instance.start():
                     self._modules.add_running_instance(instance)
             else:
-                self.log.error('Instance not known: %s' % instance_name)                              
+                self.output_text('Instance not known: %s' % instance_name)                              
                 
     def stop(self,arguments=None):
         if arguments:
@@ -159,18 +159,20 @@ class MyBot(object):
     def list_modules(self,arguments=None):
         modules = self._modules.get_modules().values()
         running_instances = self._modules.get_running_instances()
+        text = ''
         for module in modules:
-            self.output_text("Instances of %s: " % module.name)
+            text = text + "\nInstances of %s: \n" % module.name
             instances = module.get_instances()
             if not instances:
-                self.output_text('** No instances available!')
+                text = text + '** No instances available! \n'
                 continue
             for instance in instances.values():
                 if running_instances.has_key(instance.pid()):
-                    status = 'Running with PID %d ' % instance.pid()
+                    status = 'Running with PID %d' % instance.pid()
                 else:
                     status = 'Stopped'
-                self.output_text("\t%s\t\t%s" % (instance.name,status))
+                text = text + "\t%s\t\t%s\n" % (instance.name,status)
+        self.output_text("%s\n" % text)
  
     # EO COMMANDS /
     
@@ -197,7 +199,7 @@ class MyBot(object):
             self.log.debug('Send command to %s ' % command.destination)
             self._modules.get_instance(command.destination).add_command(command)
         else:
-            self.output_text('Unknown command: %s' % command_line)
+            self.output_text('Unknown command: %s\n' % command_line)
        
     def run(self):
         self._shuttingdown = False
