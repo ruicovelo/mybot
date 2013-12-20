@@ -8,24 +8,27 @@ class MyLogger(logging.getLoggerClass()):
 
     def __init__(self,name):
         super(MyLogger,self).__init__(name)
-        self._file_handlers = {}
-        formatter = logging.Formatter(self._FORMAT)
+        self._formatter = logging.Formatter(self._FORMAT)
         console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
+        console_handler.setFormatter(self._formatter)
         self.addHandler(console_handler)
         
     def add_log_file(self,filename):
-        formatter = logging.Formatter(self._FORMAT)
-        if filename:
-            file_handler = logging.FileHandler(filename)
-            file_handler.setFormatter(formatter)
-            self.addHandler(file_handler)
-            self._file_handlers[filename]=file_handler
-
-    def remove_log_file(self,filename):
-        #TODO: this is not working
-        if self._file_handlers.has_key(filename):
-            self.removeHandler(self._file_handlers[filename])
-            self._file_handlers.items().remove((filename,self._file_handlers[filename]))
-
-
+        file_handler = logging.FileHandler(filename)
+        file_handler.setFormatter(self._formatter)
+        self.addHandler(file_handler)
+        
+    def add_log_queue(self,queue):
+        queue_handler = QueueHandler(queue)
+        queue_handler.setFormatter(self._formatter)
+        self.addHandler(queue_handler)
+        
+class QueueHandler(logging.Handler):
+    
+    def __init__(self,queue):
+        super(QueueHandler,self).__init__()
+        self.queue = queue
+    
+    def emit(self,record):
+        msg = self.format(record)
+        self.queue.put(msg)
