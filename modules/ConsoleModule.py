@@ -10,13 +10,12 @@ from commandtranslate import BotCommand
 
 class ConsoleThread(ReceiveSocketThread):
     
-    def __init__(self,processing_function,log,in_socket_path,out_socket_path):
+    def __init__(self,processing_function,log,in_socket_path):
         super(ConsoleThread,self).__init__(processing_function=processing_function,connection=None)
         self.log = log
         self.in_socket_path=in_socket_path
-        self.out_socket_path=out_socket_path
-        self.out_socket = None
         self.in_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
+        self._connection = None
         try:
             unlink(self.in_socket_path)
         except:
@@ -32,22 +31,8 @@ class ConsoleThread(ReceiveSocketThread):
             if not self._connection or self.stopping():
                 return
             self.log.debug('Connection accepted.')
-            self.log.debug('Connecting back to client...')
-            time.sleep(2)        # hack to give client time to create a return socket
-                                # this will be fixed when we implement a communication protocol
-            self.out_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
-            try:
-                self.out_socket.connect(self.out_socket_path)
-            except:
-                self.log.error('Could not connect back to client')
-                self.out_socket = None
-                continue
-            # Connected. Going to receive data from client.        
             super(ConsoleThread,self).run()
         # If we are here we are stopping or something bad happened
-        if self.out_socket:
-            self.out_socket.close()
-            self.out_socket = None
         if self.in_socket:
             self.in_socket.close()
             self.in_socket = None
@@ -57,18 +42,18 @@ class ConsoleThread(ReceiveSocketThread):
             pass
         
     def send_command(self,arguments):
-        self.log.debug('Sending command')
-        self.out_socket.sendall(cPickle.dumps(arguments))
+        self.log.debug('Sending command: %s' % arguments.name)
+        self._connection.sendall(cPickle.dumps(arguments))
         
     def stop(self):
         # stopping gently
-        if self.out_socket:
-            self.send_command(BotCommand('console','quit','quit',None,None))
+        if self._connection:
+            self.send_command(BotCommand('console','disconnect','disconnect',None,None))
         super(ConsoleThread,self).stop()
         
 class ConsoleModule(BotModule):
     
-    _default_args = {'in_socket_path':'in_console_socket','out_socket_path':'out_console_socket'}
+    _default_args = {'in_socket_path':'console_socket'}
 
     def __init__(self,name='console',parameters={}):
         super(ConsoleModule,self).__init__(name=name,parameters=parameters)
@@ -84,9 +69,8 @@ class ConsoleModule(BotModule):
 
     def _process_controller_data(self,data):
         self.log.debug('Controller data: %s' % data)
-        if self._console_thread.out_socket:
-            cmd = BotCommand(destination='console',name='output',command=None,arguments=data,origin=None)
-            self._console_thread.out_socket.sendall(cPickle.dumps(cmd))           # send to client data sent by controller
+        cmd = BotCommand(destination='console',name='output',command=None,arguments=data,origin=None)
+        self._console_thread.send_command(cmd)           # send to client data sent by controller
         
     def send_text(self,arguments):
         if self._console_thread.out_socket:
@@ -94,7 +78,7 @@ class ConsoleModule(BotModule):
                 
     def run(self):
         super(ConsoleModule,self).run()
-        self._console_thread = ConsoleThread(processing_function=self._process_client_data,log=self.log,in_socket_path=self.parameters['in_socket_path'],out_socket_path=self.parameters['out_socket_path'])
+        self._console_thread = ConsoleThread(processing_function=self._process_client_data,log=self.log,in_socket_path=self.parameters['in_socket_path'])
         
         # To process data received from controller that must be sent to client
         #TODO: not sure if needed / main thread receives commands from controller that might be used to send data to client
