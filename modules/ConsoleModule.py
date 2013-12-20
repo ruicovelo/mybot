@@ -15,14 +15,14 @@ class ConsoleThread(ReceiveSocketThread):
         self.log = log
         self.in_socket_path=in_socket_path
         self.out_socket_path=out_socket_path
+        self.out_socket = None
+        self.in_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
         try:
             unlink(self.in_socket_path)
         except:
             pass        
         
     def run(self):
-        self.out_socket = None
-        self.in_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
         self.in_socket.bind(self.in_socket_path)
         self.in_socket.listen(0)
         
