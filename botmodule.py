@@ -145,7 +145,7 @@ class BotModule(object):
 
     def add_command(self,command,timeout=None):
         ''' Add command to the queue of commands to process in order '''
-        self.log.debug('Adding command to queue\n %s' % command.tostring())
+        self.log.debug('Adding command to queue\n %s' % command)
         self._commands_queue.put(obj=command, block=True, timeout=timeout)
         
     def _get_command_available(self):
@@ -204,7 +204,7 @@ class BotModule(object):
             self.log.debug('Executing command %s' % command)
             command.command(command.arguments)
         else:
-            self.output_text('Unknown command: %s' % command.tostring())    
+            self.output_text('Unknown command: %s' % command)    
    
 class BotModules(object):
     '''

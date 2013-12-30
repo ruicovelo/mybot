@@ -192,7 +192,7 @@ class MyBot(object):
             return
         if command:
             if not command.destination:
-                self.log.debug('Executing command %s' % command.tostring())
+                self.log.debug('Executing command %s' % command)
                 arguments = command.arguments
                 exec(self._commands[command.name])
                 return

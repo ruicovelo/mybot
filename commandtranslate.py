@@ -13,7 +13,7 @@ class BotCommand(object):
         self.origin = origin
 
     # for debugging purposes    
-    def tostring(self):
+    def __str__(self):
         return 'from: %s \nto: %s \nname: %s\ncommand: %s\nargs: %s' % (self.origin,self.destination,self.name,self.command,self.arguments)
 
 class BotCommandTranslator(object):
@@ -165,7 +165,7 @@ def main():
             if cmd.command in ['?']:
                 print('%s: yes...' % translator.get_current_destination())
                 continue
-            print(cmd.tostring())
+            print(cmd)
         else:
             print('%s: not sure what that means...' % translator.get_current_destination())
 
