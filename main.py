@@ -9,35 +9,47 @@ import mythreading
 from mylogging import MyLogger
 
 # My modules
-from communication import voice
 from commandtranslate import BotCommandTranslator
 from botmodule import BotModules
 
 class MyBot(object):
+    
     name = "MyBot"
-    _voice = voice.Voice()
-    
     _MODULE_PATH='modules/'
-    _modules = None
-    _outputs_subscribers = []
-    _outputs_queue = Queue()
-    _commands_queue = Queue()
-    _commands = {}
-
-    translator = None
-    
-    _shuttingdown = False
-    
     _THREAD_TIMEOUT_SECS = 5.0
-    _receive_outputs_thread = None      # waits for outputs from running modules
     
     def __init__(self):
-        signal.signal(signal.SIGTERM,self._SIGTERM)
-        signal.signal(signal.SIGQUIT,self._SIGQUIT)
-        signal.signal(signal.SIGINT,self._SIGINT)
-        signal.signal(signal.SIGCHLD,self.child_death)
+        signal.signal(signal.SIGTERM,self._stop_signal_handling)
+        signal.signal(signal.SIGQUIT,self._stop_signal_handling)
+        signal.signal(signal.SIGINT,self._stop_signal_handling)
+        signal.signal(signal.SIGCHLD,self._child_death)
+     
+        
+        self._outputs_subscribers = []      # instances that want to receive output text from controller
+        self._outputs_queue = Queue()       # queue for text to be output by instances to controller
+        self._commands_queue = Queue()      # queue for commands to be output by instances to controller
+        self._config()
+        
+        # Starting the thread that will receive text to process (display/save/send)
+        self._receive_outputs_thread = mythreading.ReceiveQueueThread(self.output_text,self._outputs_queue)
+        self._receive_outputs_thread.start()
+
+        self.translator = BotCommandTranslator()
+        #TODO: add more controller commands
+        self._commands = {}
+        self._commands['shutdown']='self.shutdown()'
+        self._commands['list']='self.list_modules()'
+        self._commands['start']='self.start(arguments)'
+        self._commands['stop']='self.stop(arguments)'
+        self._commands['reload']='self.reload(arguments)'
+        self.translator.add_commands(None,self._commands)
+        
+        # Loading modules and starting instances configured for auto start
+        self._modules = BotModules(self._MODULE_PATH)
+
+    def _config(self):
         config_parser = ConfigParser()
-        config_file_path = 'MyBot.cfg'
+        config_file_path = 'MyBot.cfg' #TODO: set this elsewhere
         config_parser.read(config_file_path)
         configuration_values={'LogLevel': logging.DEBUG}         # set default values here
         if not config_parser.has_section('Initialization'):
@@ -50,49 +62,47 @@ class MyBot(object):
                 config_parser.set('Initialization', default, configuration_values[default])
         
         config_parser.write(open(config_file_path,"w"))
-
         self.log = logging.getLogger(self.name)
         self.log.setLevel(int(configuration_values['LogLevel']))
         self.log.add_log_file('common.log')
         self.log.debug('Initializing MyBot with PID %d...' % os.getpid())
         
-        # Starting the thread that will receive text to process (display/save/send)
-        self._receive_outputs_thread = mythreading.ReceiveQueueThread(self.output_text,self._outputs_queue)
-        self._receive_outputs_thread.start()
-
-        self.translator = BotCommandTranslator()
-        #TODO: add more controller commands
-        self._commands['shutdown']='self.shutdown()'
-        self._commands['list']='self.list_modules()'
-        self._commands['start']='self.start(arguments)'
-        self._commands['stop']='self.stop(arguments)'
-        self.translator.add_commands(None,self._commands)
-        
-        # Loading modules and starting instances configured for auto start
-        self._modules = BotModules(self._MODULE_PATH)
-
-    def _SIGTERM(self,signum,frame):
-        self.shutdown()
-
-    def _SIGQUIT(self,signum,frame):
-        self.shutdown()
-        
-    def _SIGINT(self,signum,frame):
-        self.shutdown()
-
-    def child_death(self,signum,frame):
+    def _child_death(self,signum,frame):
         (pid,exit_code) = os.wait()
-        instances = self._modules.get_instances().values()
-        for instance in instances:
-            if instance.pid() == pid:
-                if exit_code != 0:
-                    self.log.error('%s crashed with exit code %d' % (instance.name,exit_code))
-                    #TODO: actions? restart? notify?
-                else:
-                    self.log.debug('%s stopped. is_alive() %s' % (instance.name,str(instance.is_alive())))
-                return 
+        try:
+            instance = self._modules.get_running_instance(pid)
+            self._modules.remove_running_instance(pid)
+        except ValueError:
+            self.log.error('Not a running instance?')
+            return
+        if exit_code != 0:
+            self.log.error('%s crashed with exit code %d' % (instance.name,exit_code))
+            #TODO: actions? restart? notify?
+        else:
+            self.log.debug('%s stopped.' % (instance.name))
+
+    def _stop_signal_handling(self,signum,frame):
+        self.shutdown()
 
     # COMMANDS
+    def reload(self,arguments=None):
+        if arguments:
+            module_name=arguments[0]
+            module = self._modules.get_modules()[module_name]
+            instances = module.get_instances().values()
+            for instance in instances:
+                self.stop(instance.name)
+                self._modules.remove_instance(module, instance.name)
+                #TODO: wait for instances to stop?
+            self.list_modules()
+            del self._modules.get_modules()[module_name]
+            file_path = module.file_path
+            module = None
+            module = self._modules.load_module(file_path)
+            self._modules.initialize_module(module)
+            print('Final')
+            self.list_modules()
+                
     def start(self,arguments=None):
         if arguments:
             instance_name = arguments[0]
@@ -103,9 +113,10 @@ class MyBot(object):
                 instance.set_output_queue(self._outputs_queue)
                 instance.check_outputs_subscriber(self._outputs_subscribers)
                 instance.set_output_commands_queue(self._commands_queue)
-                instance.start()
+                if instance.start():
+                    self._modules.add_running_instance(instance)
             else:
-                self.log.error('Instance not known: %s' % instance_name)                              
+                self.output_text('Instance not known: %s' % instance_name)                              
                 
     def stop(self,arguments=None):
         if arguments:
@@ -146,31 +157,32 @@ class MyBot(object):
         return False
 
     def list_modules(self,arguments=None):
-        instances = self._modules.get_instances()
-        if not instances:
-            self.output_text('No instances available!')
-            return
-
-        self.output_text('Available instances of modules:')
-        for instance in instances:
-            self.output_text("%s\t\t%s" % (instance,instances[instance].status()))
-    
-    def say(self,arguments):
-        #TODO: move this to a module
-        if not self._voice.speak(arguments):
-            print("Don't have voice?!")
-  
-    def status(self):
-        self.output_text("Name: %s" % self.name)
-  
+        modules = self._modules.get_modules().values()
+        running_instances = self._modules.get_running_instances()
+        text = ''
+        for module in modules:
+            text = text + "\nInstances of %s: \n" % module.name
+            instances = module.get_instances()
+            if not instances:
+                text = text + '** No instances available! \n'
+                continue
+            for instance in instances.values():
+                if running_instances.has_key(instance.pid()):
+                    status = 'Running with PID %d' % instance.pid()
+                else:
+                    status = 'Stopped'
+                text = text + "\t%s\t\t%s\n" % (instance.name,status)
+        self.output_text("%s\n" % text)
+ 
     # EO COMMANDS /
     
                 
     def output_text(self,text):
         ''' Handle the output of text directing it to the available outputs '''
-        sys.stdout.write(text+"\n")
+        sys.stdout.write(str(text)+"\n")
         for o in self._outputs_subscribers:
-            o.put(text+"\n")
+            if o: #TODO: review this 'if'
+                o.put(str(text)+"\n")
     
     def execute_command(self,command_line):
         self.log.debug('Translating command line %s' % command_line)
@@ -180,20 +192,21 @@ class MyBot(object):
             return
         if command:
             if not command.destination:
-                self.log.debug('Executing command %s' % command.tostring())
+                self.log.debug('Executing command %s' % command)
                 arguments = command.arguments
                 exec(self._commands[command.name])
                 return
             self.log.debug('Send command to %s ' % command.destination)
             self._modules.get_instance(command.destination).add_command(command)
         else:
-            self.output_text('Unknown command: %s' % command_line)
+            self.output_text('Unknown command: %s\n' % command_line)
        
     def run(self):
+        self._shuttingdown = False
         instances = self._modules.get_instances()
         for instance_name in instances:
             if instances[instance_name].running():
-                self.start([instance_name])        
+                self.start([instance_name])
         while not self._shuttingdown:
             try:
                 s = self._commands_queue.get(block=True, timeout=3)
@@ -211,7 +224,11 @@ class MyBot(object):
 
 logging.setLoggerClass(MyLogger)
 bot=MyBot()
-bot.run()
+try:
+    bot.run()
+except Exception,e:
+    bot.shutdown()
+    raise
 print('Main thread exiting...')
 
 

@@ -13,8 +13,6 @@ import random
 
 class SleeperModule(BotModule):
 
-    _seconds = None
-    _randomize = False
     _default_args = {'seconds':5,'randomize':False}
     
     def __init__(self,name='sleeper',parameters={}):

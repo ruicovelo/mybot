@@ -5,12 +5,6 @@ from time import time
 
 class BotCommand(object):
     
-    origin = None
-    destination = None
-    name = None
-    command = None
-    arguments = []
-    
     def __init__(self,destination,name,command,arguments,origin=None):
         self.destination = destination
         self.name = name
@@ -19,20 +13,17 @@ class BotCommand(object):
         self.origin = origin
 
     # for debugging purposes    
-    def tostring(self):
+    def __str__(self):
         return 'from: %s \nto: %s \nname: %s\ncommand: %s\nargs: %s' % (self.origin,self.destination,self.name,self.command,self.arguments)
 
-
 class BotCommandTranslator(object):
-    
-    _common_commands={}                     # commands accepted by all modules / destinations
-    _commands = {}
-    _current_destination = None
-    _last_current_destination_change = None
-    _conversation_timeout_secs = 10           # seconds
-    
+
     def __init__(self,conversation_timeout_secs=10):
         self._conversation_timeout_secs = conversation_timeout_secs
+        self._last_current_destination_change = None
+        self._current_destination = None
+        self._commands = {}
+        self._common_commands = {}
 
     def add_command(self,destination_name,command_name):
         '''
@@ -126,6 +117,8 @@ class BotCommandTranslator(object):
         return False
 
 
+# TESTING CODE
+
 def stop(arguments):
     print('stopping')
 
@@ -172,7 +165,7 @@ def main():
             if cmd.command in ['?']:
                 print('%s: yes...' % translator.get_current_destination())
                 continue
-            print(cmd.tostring())
+            print(cmd)
         else:
             print('%s: not sure what that means...' % translator.get_current_destination())
 

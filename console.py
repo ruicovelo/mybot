@@ -7,17 +7,16 @@ import cPickle
 from commandtranslate import BotCommand
 import sys 
 
-IN_CON_SOCKET_PATH = 'in_console_socket'
-OUT_CON_SOCKET_PATH = 'out_console_socket'
+CON_SOCKET_PATH = 'console_socket'
+
 line_number = 0
 
 class ConsoleReceiveSocketThread(ReceiveSocketThread):
     
-    def __init__(self,connection,in_socket,out_socket,console):
-        super(ConsoleReceiveSocketThread,self).__init__(processing_function=self.handle_received_output,connection=connection)
-        self.in_socket = in_socket
-        self.out_socket = out_socket
+    def __init__(self,socket,console):
+        super(ConsoleReceiveSocketThread,self).__init__(processing_function=self.handle_received_output,connection=socket)
         self.console = console
+        self.socket = socket
         
     def handle_received_output(self,data):
         cmd=cPickle.loads(data)
@@ -35,8 +34,7 @@ class ConsoleReceiveSocketThread(ReceiveSocketThread):
     
     def disconnect(self):
         self.stop()
-        in_con_socket.close()
-        out_con_socket.close()
+        self.socket.close()
 
     def addline(self,line):
         #TODO: replace globals, use __init__ to pass variables if possible
@@ -51,36 +49,24 @@ def main(stdscr):
     # This is clumsy and will sometimes fail; server might be faster to connect back 
     # before we have a socket ready
     # This will be fixed when we implement a communication protocol
-    global in_con_socket
-    global out_con_socket
-    in_con_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
-    in_con_socket.connect(IN_CON_SOCKET_PATH)
-    out_con_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
-    out_con_socket.bind(OUT_CON_SOCKET_PATH)
-    out_con_socket.listen(1)
-    console.addline('Connected to server. Waiting for server to connect back to client...')
-    conn,addr = out_con_socket.accept()
-    console.addline('Connection received.')
-    t = ConsoleReceiveSocketThread(connection=conn,in_socket=in_con_socket,out_socket=out_con_socket,console=console)
+    global con_socket
+    con_socket = socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
+    con_socket.connect(CON_SOCKET_PATH)
+    console.addline('Connected to server.')
+    t = ConsoleReceiveSocketThread(socket=con_socket,console=console)
     t.start()
     try:
         while console.readline():
-            in_con_socket.sendall(console.input_string)
+            con_socket.sendall(console.input_string)
     except KeyboardInterrupt:
-        #TODO: send disconnect command?
         console.addline('Disconnecting...')
+        con_socket.sendall('disconnect')
         t.disconnect()
     finally:
-        in_con_socket.close()
-        out_con_socket.close()
+        con_socket.close()
         #TODO: timeout?
         t.join() 
         console.addline('Closed')
-        os.unlink(OUT_CON_SOCKET_PATH)                  
 
 if __name__ == '__main__':
-    try:
-        os.unlink(OUT_CON_SOCKET_PATH)
-    except:
-        pass
     curses.wrapper(main)
