@@ -11,16 +11,12 @@ class MymoneyModule(BotModule):
     '''
     Access bank account information
     '''
-    
-    _username = None
-    _password = None
-    _account_number = None
-    _period_minutes = 1 
-    _last_check = None
 
     def __init__(self,name='bank',parameters={}):
         super(MymoneyModule,self).__init__(name=name,parameters=parameters)
         try:
+            self._period_minutes = 1 
+            self._last_check = None
             self._username = parameters['username']
             self._password = parameters['password']
             self._account_number = parameters['account']
