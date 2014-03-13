@@ -88,6 +88,7 @@ class BotCommandTranslator(object):
         
         # split into words 
         words = re.findall(r"[\w]+",line)
+        print(words)
         if len(words) == 0:
             # could not translate into words
             # only non alphanumeric characters?
@@ -131,7 +132,7 @@ def end_conversation(arguments):
 
 def main():
     # demo code
-    modules=[None,'sleeper','console','money']
+    modules=[None,'sleeper','console','money','mail']
     #common_commands=['stop','start','status',('ok','bye','.'),'?']
     common_commands={'stop': stop,'start': start,'.':end_conversation}
     module_specific_commands={}
@@ -143,20 +144,21 @@ def main():
     
     for module in modules:
         for common_command in common_commands.keys():
-            translator.add_command(destination_name=module, command_name=common_command, command=common_commands[common_command])
+            translator.add_command(destination_name=module, command_name=common_command) # , command=common_commands[common_command])
         
     #for module in modules:    
     #    translator.add_commands(module,module_specific_commands[module])
     
     while True:
         s = raw_input().strip()
-        if s=='':break
+        if s=='':
+            break
         cmd = translator.validate(s)
         if cmd == True:
             print('Now talking to %s ' % translator.get_current_destination())
             continue
         if cmd:
-            cmd.command(cmd.arguments)
+ 
             print(cmd)
             if cmd.command in ['ok','bye','.']:
                 print('%s: Bye!' % translator.get_current_destination())
