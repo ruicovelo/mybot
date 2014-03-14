@@ -82,12 +82,21 @@ class BotCommandTranslator(object):
             return destination
         else:
             return ''
-
+        
+    def _parse_command_line(self,command_line):
+        matches = re.findall(r'([a-zA-Z\.@\-_\+]+)|"(.+)"',command_line)
+        words = []
+        for match in matches:
+            for word in match:
+                if word:
+                    words.append(word)
+        return words
+                
     def validate(self,line,origin=None):
         destination = self._get_current_destination()
         
         # split into words 
-        words = re.findall(r"[\w]+",line)
+        words = self._parse_command_line(line)
         print(words)
         if len(words) == 0:
             # could not translate into words
