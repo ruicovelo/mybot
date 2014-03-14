@@ -52,7 +52,7 @@ class MymoneyModule(BotModule):
                 pass
             else:
                 if not self.stopping():
-                    if not self._last_check or (time.time() - self._last_check)/60 > self._period_minutes:
+                    if self._period_minutes > 0 and (not self._last_check or (time.time() - self._last_check)/60 > self._period_minutes):
                         transactions = self.get_transactions()
                         if transactions:
                             for transaction in transactions:
