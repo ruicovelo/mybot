@@ -4,13 +4,16 @@ from collections import OrderedDict
 
 
 class WrongValueException(Exception):
-    pass
+    def __str__(self):
+        return "WrongValueException: unrecognized value for argument!"
 
 class UnknownArgumentException(Exception):
-    pass
+    def __str__(self):
+        return "UnknownArgumentException: unrecognized argument name!"
 
 class MissingValueException(Exception):
-    pass 
+    def __str__(self):
+        return "MissingValueException: argument requires value!"
 
 
 class BotCommand(object):
@@ -69,8 +72,8 @@ class BotCommand(object):
         
     def validate(self,arguments):
         #TODO: optional arguments
-        arguments=self._parse_argument_list(arguments)
-        return True
+        self._parse_argument_list(arguments)
+        return self._arguments
             
     # for debugging purposes    
     def __str__(self):
@@ -149,7 +152,7 @@ class BotCommandTranslator(object):
         Splits command line into "individual expressions"
         "Individual expressions" are words or sets of words inside quotes
         ''' 
-        matches = re.findall(r'([a-zA-Z\.@\-_\+]+)|"(.+)"',command_line)
+        matches = re.findall(r'([0-9a-zA-Z\.@\-_\+]+)|"(.+)"',command_line)
         words = []
         for match in matches:
             for word in match:
