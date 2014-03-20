@@ -50,6 +50,12 @@ class MyBot(object):
         self._commands = {}
         self.add_command(BotCommand(destination=None,name='shutdown',command='self.shutdown()'))
         self.add_command(BotCommand(destination=None,name='list',command='self.list_modules()'))
+        command = BotCommand(destination=None,name='start',command='self.start(arguments)')
+        command.add_argument('module', '.+')
+        self.add_command(command)
+        command = BotCommand(destination=None,name='stop',command='self.stop(arguments)')
+        command.add_argument('module', '.+')
+        self.add_command(command)
 
         #self._commands['shutdown']='self.shutdown()'
         #self._commands['list']='self.list_modules()'
@@ -107,7 +113,7 @@ class MyBot(object):
             module = self._modules.get_modules()[module_name]
             instances = module.get_instances().values()
             for instance in instances:
-                self.stop(instance.name)
+                self.stop({'module':instance.name})
                 self._modules.remove_instance(module, instance.name)
                 #TODO: wait for instances to stop?
             self.list_modules()
@@ -121,7 +127,7 @@ class MyBot(object):
                 
     def start(self,arguments=None):
         if arguments:
-            instance_name = arguments[0]
+            instance_name = arguments['module']
             instance = self._modules.get_instance(instance_name)
             if instance:
                 self.output_text('Starting %s ' % instance.name)
@@ -136,7 +142,7 @@ class MyBot(object):
                 
     def stop(self,arguments=None):
         if arguments:
-            instance = self._modules.get_instance(arguments[0])
+            instance = self._modules.get_instance(arguments['module'])
             if instance:
                 if instance.running():
                     self.output_text('Stopping %s ' % instance.name)
@@ -212,12 +218,16 @@ class MyBot(object):
                 #TODO: remove this when controller has been migrated to a module
                 try:
                     available_command = self._commands[command.name]
-                    if available_command.validate(command.arguments):
-                        self.log.debug('Executing command %s' % available_command)
-                        exec(available_command.command)
-                        return
+                    arguments = available_command.validate(command.arguments)
+                    self.log.debug('Executing command %s' % available_command)
+                    self.log.debug(arguments)
+                    exec(available_command.command)
+                    return
                 except KeyError:
-                    self.output_text('Unknown command: %s\n' % command_line)
+                    self.output_text('KeyError: Unknown command: %s\n' % command_line)
+                    return
+                except Exception,e:
+                    self.output_text(str(e))
                     return
             self.log.debug('Send command to %s ' % command.destination)
             self._modules.get_instance(command.destination).add_command(command)
@@ -229,7 +239,7 @@ class MyBot(object):
         instances = self._modules.get_instances()
         for instance_name in instances:
             if instances[instance_name].running():
-                self.start([instance_name])
+                self.start({'module':instance_name})
         while not self._shuttingdown:
             try:
                 s = self._commands_queue.get(block=True, timeout=3)
@@ -250,6 +260,7 @@ bot=MyBot()
 try:
     bot.run()
 except Exception,e:
+    print(str(e))
     bot.shutdown()
     raise
 print('Main thread exiting...')
