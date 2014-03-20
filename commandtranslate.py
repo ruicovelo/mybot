@@ -1,6 +1,16 @@
 import re
 from time import time
+from collections import OrderedDict
 
+
+class WrongValueException(Exception):
+    pass
+
+class UnknownArgumentException(Exception):
+    pass
+
+class MissingValueException(Exception):
+    pass 
 
 
 class BotCommand(object):
@@ -11,7 +21,56 @@ class BotCommand(object):
         self.command = command
         self.arguments = arguments
         self.origin = origin
+        self._mandatory_arguments = OrderedDict()
+        self._optional_arguments = OrderedDict()
+        self._arguments = OrderedDict()
+    
+    def add_argument(self,name,value_regexp=".*"):
+        #TODO: optional arguments
+        self._mandatory_arguments[name]=value_regexp
 
+    def _parse_argument_list(self,arguments):
+        #TODO: optional arguments
+        w = 0
+        while w < len(arguments):
+            if arguments[w] in self._mandatory_arguments.keys():
+                value_regexp = self._mandatory_arguments[arguments[w]]
+                if value_regexp:
+                    # we expect a value event if empty string
+                    if w < len(arguments) - 1:
+                        value = arguments[w+1]
+                        if re.match(value_regexp,value):
+                            self._arguments[arguments[w]]=value
+                            w = w + 2
+                        else:
+                            raise WrongValueException()
+                    else:
+                        # we do not have a value available!
+                        raise MissingValueException()
+                else:
+                    # value not expected
+                    self._arguments[arguments[w]]=True
+                    w = w + 1
+                    continue
+            else:
+                # unknown argument name
+                # is this a known value?
+                # trying to match with the first value regexp available
+                argument_name = None
+                value = arguments[w]
+                for argument_name in self._mandatory_arguments.keys():
+                    value_regexp = self._mandatory_arguments[argument_name]
+                    if value_regexp and re.match(value_regexp,arguments[w]):
+                        self._arguments[argument_name]=value
+                        break
+                if not self._arguments.has_key(argument_name):
+                    raise UnknownArgumentException()
+                w = w + 1
+        
+    def validate(self,arguments):
+        #TODO: optional arguments
+        arguments=self._parse_argument_list(arguments)
+            
     # for debugging purposes    
     def __str__(self):
         return 'from: %s \nto: %s \nname: %s\ncommand: %s\nargs: %s' % (self.origin,self.destination,self.name,self.command,self.arguments)
@@ -84,6 +143,10 @@ class BotCommandTranslator(object):
             return ''
         
     def _parse_command_line(self,command_line):
+        '''
+        Splits command line into "individual expressions"
+        "Individual expressions" are words or sets of words inside quotes
+        ''' 
         matches = re.findall(r'([a-zA-Z\.@\-_\+]+)|"(.+)"',command_line)
         words = []
         for match in matches:
@@ -93,11 +156,15 @@ class BotCommandTranslator(object):
         return words
                 
     def validate(self,line,origin=None):
+        '''
+        Does basic command validation and validates command destination.
+        '''
+        
+        # checking if we are in a conversation
         destination = self._get_current_destination()
         
-        # split into words 
+        # split into words / individual expressions 
         words = self._parse_command_line(line)
-        print(words)
         if len(words) == 0:
             # could not translate into words
             # only non alphanumeric characters?
@@ -113,6 +180,7 @@ class BotCommandTranslator(object):
             if len(words) > 1:
                 w = w + 1
             else:
+                # if there is no more words, we are just starting a conversation with a destination
                 self.start_conversation(destination)
                 return True
             
@@ -121,54 +189,40 @@ class BotCommandTranslator(object):
             command = words[w]
             return BotCommand(destination=destination,name=words[w],command=command,arguments=words[w+1:],origin=origin)
         
-        if self._commands[destination].__contains__(words[w]):
-            command = words[w]
-            return BotCommand(destination=destination,name=words[w],command=command,arguments=words[w+1:],origin=origin)
+        try:
+            if self._commands[destination].__contains__(words[w]):
+                command = words[w]
+                return BotCommand(destination=destination,name=words[w],command=command,arguments=words[w+1:],origin=origin)
+        except KeyError:
+            pass
         return False
 
 
 # TESTING CODE
 
-def stop(arguments):
-    print('stopping')
-
-def start(arguments):
-    print('starting')
-
-def end_conversation(arguments):
-    print('end conversation')
-
-
 def main():
     # demo code
-    modules=[None,'sleeper','console','money','mail']
-    #common_commands=['stop','start','status',('ok','bye','.'),'?']
-    common_commands={'stop': stop,'start': start,'.':end_conversation}
-    module_specific_commands={}
 
-    #for module in modules:
-    #    module_specific_commands[module]=[]   
-    #module_specific_commands['console'].append('disconnect')
+    #botcommand = BotCommand(destination=None,name='send',command='send',arguments=None,origin=None)
+    #botcommand.add_argument('to', '.+@.+')
+    #botcommand.add_argument('subject','.+')
+    #botcommand.add_argument('body','.*')
+    #arguments = ['rui.covelo@gmail.com', 'subject', 'test', 'body', 'saldkl kasdlk ldalk']
+    #botcommand.validate(arguments)
+
     translator = BotCommandTranslator()
-    
-    for module in modules:
-        for common_command in common_commands.keys():
-            translator.add_command(destination_name=module, command_name=common_command) # , command=common_commands[common_command])
-        
-    #for module in modules:    
-    #    translator.add_commands(module,module_specific_commands[module])
     
     while True:
         s = raw_input().strip()
         if s=='':
             break
         cmd = translator.validate(s)
+        print(cmd)
         if cmd == True:
             print('Now talking to %s ' % translator.get_current_destination())
             continue
         if cmd:
- 
-            print(cmd)
+            cmd.validate(cmd.arguments)
             if cmd.command in ['ok','bye','.']:
                 print('%s: Bye!' % translator.get_current_destination())
                 translator.end_conversation()
