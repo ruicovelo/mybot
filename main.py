@@ -9,7 +9,7 @@ import mythreading
 from mylogging import MyLogger
 
 # My modules
-from commandtranslate import BotCommandTranslator
+from commandtranslate import BotCommandTranslator,BotCommand
 from botmodule import BotModules
 
 class MyBot(object):
@@ -33,19 +33,35 @@ class MyBot(object):
         # Starting the thread that will receive text to process (display/save/send)
         self._receive_outputs_thread = mythreading.ReceiveQueueThread(self.output_text,self._outputs_queue)
         self._receive_outputs_thread.start()
-
-        self.translator = BotCommandTranslator()
-        #TODO: add more controller commands
-        self._commands = {}
-        self._commands['shutdown']='self.shutdown()'
-        self._commands['list']='self.list_modules()'
-        self._commands['start']='self.start(arguments)'
-        self._commands['stop']='self.stop(arguments)'
-        self._commands['reload']='self.reload(arguments)'
-        self.translator.add_commands(None,self._commands)
         
         # Loading modules and starting instances configured for auto start
-        self._modules = BotModules(self._MODULE_PATH)
+        self._modules = BotModules(self._MODULE_PATH)        
+
+        self.translator = BotCommandTranslator(self._modules)
+
+    #botcommand = BotCommand(destination=None,name='send',command='send',arguments=None,origin=None)
+    #botcommand.add_argument('to', '.+@.+')
+    #botcommand.add_argument('subject','.+')
+    #botcommand.add_argument('body','.*')
+    #arguments = ['rui.covelo@gmail.com', 'subject', 'test', 'body', 'saldkl kasdlk ldalk']
+    #botcommand.validate(arguments)        
+        
+        #TODO: add more controller commands
+        self._commands = {}
+        self.add_command(BotCommand(destination=None,name='shutdown',command='self.shutdown()'))
+        self.add_command(BotCommand(destination=None,name='list',command='self.list_modules()'))
+
+        #self._commands['shutdown']='self.shutdown()'
+        #self._commands['list']='self.list_modules()'
+        #self._commands['start']='self.start(arguments)'
+        #self._commands['stop']='self.stop(arguments)'
+        #self._commands['reload']='self.reload(arguments)'
+        #self.translator.add_commands(None,self._commands)
+        
+
+    
+    def add_command(self,command):
+        self._commands[command.name]=command
 
     def _config(self):
         config_parser = ConfigParser()
@@ -192,10 +208,17 @@ class MyBot(object):
             return
         if command:
             if not command.destination:
-                self.log.debug('Executing command %s' % command)
-                arguments = command.arguments
-                exec(self._commands[command.name])
-                return
+                # command sent to controller
+                #TODO: remove this when controller has been migrated to a module
+                try:
+                    available_command = self._commands[command.name]
+                    if available_command.validate(command.arguments):
+                        self.log.debug('Executing command %s' % available_command)
+                        exec(available_command.command)
+                        return
+                except KeyError:
+                    self.output_text('Unknown command: %s\n' % command_line)
+                    return
             self.log.debug('Send command to %s ' % command.destination)
             self._modules.get_instance(command.destination).add_command(command)
         else:

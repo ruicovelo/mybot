@@ -15,7 +15,7 @@ class MissingValueException(Exception):
 
 class BotCommand(object):
     
-    def __init__(self,destination,name,command,arguments,origin=None):
+    def __init__(self,destination,name,command,arguments=None,origin=None):
         self.destination = destination
         self.name = name
         self.command = command
@@ -70,6 +70,7 @@ class BotCommand(object):
     def validate(self,arguments):
         #TODO: optional arguments
         arguments=self._parse_argument_list(arguments)
+        return True
             
     # for debugging purposes    
     def __str__(self):
@@ -77,12 +78,13 @@ class BotCommand(object):
 
 class BotCommandTranslator(object):
 
-    def __init__(self,conversation_timeout_secs=10):
+    def __init__(self,modules,conversation_timeout_secs=10):
         self._conversation_timeout_secs = conversation_timeout_secs
         self._last_current_destination_change = None
         self._current_destination = None
         self._commands = {}
         self._common_commands = {}
+        self._modules = modules
 
     def add_command(self,destination_name,command_name):
         '''
@@ -154,7 +156,10 @@ class BotCommandTranslator(object):
                 if word:
                     words.append(word)
         return words
-                
+    
+    def _validate_destination(self,destination):
+        return self._modules.get_instance(destination)
+        
     def validate(self,line,origin=None):
         '''
         Does basic command validation and validates command destination.
@@ -175,8 +180,9 @@ class BotCommandTranslator(object):
             
         # check if first word is a destination 
         w = 0
-        if self._commands.keys().__contains__(words[w]):
-            destination = words[0]
+        new_destination = self._validate_destination(words[w])
+        if new_destination:
+            destination = new_destination
             if len(words) > 1:
                 w = w + 1
             else:
@@ -184,6 +190,11 @@ class BotCommandTranslator(object):
                 self.start_conversation(destination)
                 return True
             
+        if destination == None:
+            # send command to controller
+            #TODO: remove this when the controller is migrated to a module
+            return BotCommand(destination=None,name=words[w],command=words[w],arguments=words[w+1:],origin=origin)
+        
         # check if w word is a command accepted by the destination
         if self._common_commands.__contains__(words[w]):
             command = words[w]
