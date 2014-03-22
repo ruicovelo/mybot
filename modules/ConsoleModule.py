@@ -42,8 +42,9 @@ class ConsoleThread(ReceiveSocketThread):
             pass
         
     def send_command(self,arguments):
-        self.log.debug('Sending command: %s' % arguments.name)
-        self._connection.sendall(cPickle.dumps(arguments))
+        if self._connection:
+            self.log.debug('Sending command: %s' % arguments.name)
+            self._connection.sendall(cPickle.dumps(arguments))
         
     def stop(self):
         # stopping gently
