@@ -23,8 +23,7 @@ class MyBot(object):
         signal.signal(signal.SIGQUIT,self._stop_signal_handling)
         signal.signal(signal.SIGINT,self._stop_signal_handling)
         signal.signal(signal.SIGCHLD,self._child_death)
-     
-        
+            
         self._outputs_subscribers = []      # instances that want to receive output text from controller
         self._outputs_queue = Queue()       # queue for text to be output by instances to controller
         self._commands_queue = Queue()      # queue for commands to be output by instances to controller
@@ -37,15 +36,7 @@ class MyBot(object):
         # Loading modules and starting instances configured for auto start
         self._modules = BotModules(self._MODULE_PATH)        
 
-        self.translator = BotCommandTranslator(self._modules)
-
-    #botcommand = BotCommand(destination=None,name='send',command='send',arguments=None,origin=None)
-    #botcommand.add_argument('to', '.+@.+')
-    #botcommand.add_argument('subject','.+')
-    #botcommand.add_argument('body','.*')
-    #arguments = ['rui.covelo@gmail.com', 'subject', 'test', 'body', 'saldkl kasdlk ldalk']
-    #botcommand.validate(arguments)        
-        
+        self.translator = BotCommandTranslator(self._modules)  
         #TODO: add more controller commands
         self._commands = {}
         self.add_command(BotCommand(destination=None,name='shutdown',command='self.shutdown()'))
@@ -56,14 +47,9 @@ class MyBot(object):
         command = BotCommand(destination=None,name='stop',command='self.stop(arguments)')
         command.add_argument('module', '.+')
         self.add_command(command)
-
-        #self._commands['shutdown']='self.shutdown()'
-        #self._commands['list']='self.list_modules()'
-        #self._commands['start']='self.start(arguments)'
-        #self._commands['stop']='self.stop(arguments)'
-        #self._commands['reload']='self.reload(arguments)'
-        #self.translator.add_commands(None,self._commands)
-        
+        command = BotCommand(destination=None,name='reload',command='self.reload(arguments)')
+        command.add_argument('module', '.+')
+        self.add_command(command)
 
     
     def add_command(self,command):
@@ -172,7 +158,6 @@ class MyBot(object):
         self.log.debug('Outputs thread closed.')   
         logging.shutdown()
         
-
     def _get_module(self,module_name):
         if self._modules.get_instances().has_key(module_name):
             return self._modules.get_instances()[module_name]
