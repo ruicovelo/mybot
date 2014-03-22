@@ -143,7 +143,7 @@ class BotModule(object):
     def running(self):
         return self._run.value
 
-    def add_command(self,command,timeout=None):
+    def queue_command(self,command,timeout=None):
         ''' Add command to the queue of commands to process in order '''
         self.log.debug('Adding command to queue\n %s' % command)
         self._commands_queue.put(obj=command, block=True, timeout=timeout)

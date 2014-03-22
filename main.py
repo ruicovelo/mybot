@@ -215,7 +215,7 @@ class MyBot(object):
                     self.output_text(str(e))
                     return
             self.log.debug('Send command to %s ' % command.destination)
-            self._modules.get_instance(command.destination).add_command(command)
+            self._modules.get_instance(command.destination).queue_command(command)
         else:
             self.output_text('Unknown command: %s\n' % command_line)
        
