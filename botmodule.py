@@ -87,7 +87,7 @@ class BotModule(object):
             if available_command.validate(command.arguments):
                 return command
         except KeyError:
-            raise UnknownCommandException
+            raise UnknownCommandException(command.name)
     
     def _do_work(self):
         self.log.debug('Not doing the right work...')
