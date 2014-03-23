@@ -12,25 +12,29 @@ class BotCommandException(Exception):
         return self.message
     
 class UnknownCommandException(BotCommandException):
-    def __init__(self):
-        self.message = "UnknownCommandException: unrecognized command!"
+    def __init__(self,command_name):
+        self.command_name = command_name
+        self.message = "Unrecognized command: %s " % command_name
 
 class WrongValueException(BotCommandException):
-    def __init__(self):
-        self.message = "WrongValueException: unrecognized value for argument!"
+    def __init__(self,argument_name):
+        self.argument_name = argument_name
+        self.message = "Unrecognized value for argument: %s" % argument_name
 
 class UnknownArgumentException(BotCommandException):
-    def __init__(self):
-        self.message = "UnknownArgumentException: unrecognized argument name!"
+    def __init__(self,argument_name):
+        self.argument_name = argument_name
+        self.message = "Unrecognized argument name: %s" % argument_name
 
 class MissingValueException(BotCommandException):
-    def __init__(self):
-        self.message = "MissingValueException: argument requires value!"
+    def __init__(self,argument_name):
+        self.argument_name = argument_name
+        self.message = "Argument '%s' requires value!" % argument_name
 
 class MissingArgumentException(BotCommandException):
     def __init__(self,argument_name):
         self.argument_name = argument_name
-        self.message = "MissingArgumentException: %s " % argument_name
+        self.message = "Command requires '%s' argument! " % argument_name
 
 
 class BotCommand(object):
@@ -56,7 +60,8 @@ class BotCommand(object):
         new_arguments = OrderedDict()
         while w < len(arguments):
             if arguments[w] in self._mandatory_arguments.keys():
-                value_regexp = self._mandatory_arguments[arguments[w]]
+                argument_name = arguments[w]
+                value_regexp = self._mandatory_arguments[argument_name]
                 if value_regexp:
                     # we expect a value even if empty string
                     if w < len(arguments) - 1:
@@ -65,10 +70,10 @@ class BotCommand(object):
                             new_arguments[arguments[w]]=value
                             w = w + 2
                         else:
-                            raise WrongValueException()
+                            raise WrongValueException(argument_name)
                     else:
                         # we do not have a value available!
-                        raise MissingValueException()
+                        raise MissingValueException(argument_name)
                 else:
                     # value not expected
                     new_arguments[arguments[w]]=True
@@ -86,7 +91,7 @@ class BotCommand(object):
                         new_arguments[argument_name]=value
                         break
                 if not new_arguments.has_key(argument_name):
-                    raise UnknownArgumentException()
+                    raise UnknownArgumentException(argument_name)
                 w = w + 1
 
         for mandatory_argument in self._mandatory_arguments.keys():
