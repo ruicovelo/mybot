@@ -88,9 +88,10 @@ class MyBot(object):
             return
         if exit_code != 0:
             self.log.error('%s crashed with exit code %d' % (instance.name,exit_code))
+            self.output_text('%s crashed with exit code %d' % (instance.name,exit_code))
             #TODO: actions? restart? notify?
         else:
-            self.log.debug('%s stopped.' % (instance.name))
+            self.output_text('%s stopped.' % (instance.name))
 
     def _stop_signal_handling(self,signum,frame):
         self.shutdown()
