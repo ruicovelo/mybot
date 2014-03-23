@@ -39,12 +39,12 @@ class MissingArgumentException(BotCommandException):
 
 class BotCommand(object):
     
-    def __init__(self, destination, name, command, arguments=None, origin=None):
-        self.destination = destination
+    def __init__(self, name, command, arguments=None, destination_name=None,origin_name=None):
+        self.destination_name = destination_name
         self.name = name
         self.command = command
         self.arguments = arguments
-        self.origin = origin
+        self.origin_name = origin_name
         self._mandatory_arguments = OrderedDict()
         self._optional_arguments = OrderedDict()
         self._arguments = OrderedDict()
@@ -105,7 +105,7 @@ class BotCommand(object):
             
     # for debugging purposes    
     def __str__(self):
-        return 'from: %s \nto: %s \nname: %s\ncommand: %s\nargs: %s' % (self.origin, self.destination, self.name, self.command, self.arguments)
+        return 'from: %s \nto: %s \nname: %s\ncommand: %s\nargs: %s' % (self.origin_name, self.destination_name, self.name, self.command, self.arguments)
 
 class BotCommandTranslator(object):
 
@@ -164,10 +164,10 @@ class BotCommandTranslator(object):
                     words.append(word)
         return words
     
-    def _validate_destination(self, destination):
-        return self._modules.get_instance(destination)
+    def _validate_destination(self, destination_name):
+        return self._modules.get_instance(destination_name)
         
-    def validate_command(self, line, origin=None):
+    def validate_command(self, line,origin_name=None):
         '''
         Does basic command validation and validates command destination.
         '''
@@ -207,9 +207,9 @@ class BotCommandTranslator(object):
             
         if destination == None:  # send command to controller
             # TODO: remove this when the controller is migrated to a module ?
-            return BotCommand(destination=None, name=words[w], command=words[w], arguments=words[w + 1:], origin=origin)
+            return BotCommand(destination_name=None, name=words[w], command=words[w], arguments=words[w + 1:], origin_name=origin_name)
         
         # check if w word is a command accepted by the destination
-        return destination.validate_command(BotCommand(destination=destination, name=words[w], command=None, arguments=words[w + 1:], origin=origin))
+        return destination.validate_command(BotCommand(destination_name=destination.name, name=words[w], command=None, arguments=words[w + 1:], origin_name=origin_name))
 
 

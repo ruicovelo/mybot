@@ -42,15 +42,15 @@ class MyBot(object):
         
         #TODO: add more controller commands
         self._commands = {}
-        self.add_command(BotCommand(destination=None,name='shutdown',command='self.shutdown()'))
-        self.add_command(BotCommand(destination=None,name='list',command='self.list_modules()'))
-        command = BotCommand(destination=None,name='start',command='self.start(arguments)')
+        self.add_command(BotCommand(name='shutdown',command='self.shutdown()'))
+        self.add_command(BotCommand(name='list',command='self.list_modules()'))
+        command = BotCommand(name='start',command='self.start(arguments)')
         command.add_argument('module', '.+')
         self.add_command(command)
-        command = BotCommand(destination=None,name='stop',command='self.stop(arguments)')
+        command = BotCommand(name='stop',command='self.stop(arguments)')
         command.add_argument('module', '.+')
         self.add_command(command)
-        command = BotCommand(destination=None,name='reload',command='self.reload(arguments)')
+        command = BotCommand(name='reload',command='self.reload(arguments)')
         command.add_argument('module', '.+')
         self.add_command(command)
 
@@ -209,7 +209,7 @@ class MyBot(object):
             return
         
         if command:
-            if not command.destination:
+            if not command.destination_name:
                 # command sent to controller
                 #TODO: remove this when controller has been migrated to a module
                 try:
@@ -225,11 +225,7 @@ class MyBot(object):
                 except Exception,e:
                     self.output_text(str(e))
                     return
-            destination = command.destination
-            command.destination=None # TODO: BotCommand has to be reviewed to avoid this
-            # if the command object has a reference to a module, the code crashes adding the command to the queue
-            destination.queue_command(command)
-            #command.destination.queue_command(command)
+            self._modules.get_instance(command.destination_name).queue_command(command)
         else:
             self.output_text('Unknown command: %s\n' % command_line)
        

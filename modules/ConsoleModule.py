@@ -70,7 +70,7 @@ class ConsoleModule(BotModule):
 
     def _process_controller_data(self,data):
         self.log.debug('Controller data: %s' % data)
-        cmd = BotCommand(destination='console',name='output',command=None,arguments=data,origin=None)
+        cmd = BotCommand(name='output',command=None,arguments=data)
         self._console_thread.send_command(cmd)           # send to client data sent by controller
         
     def send_text(self,arguments):
