@@ -9,7 +9,7 @@ import mythreading
 from mylogging import MyLogger
 
 # My modules
-from commandtranslate import BotCommandTranslator,BotCommand
+from commandtranslate import BotCommandTranslator,BotCommand,BotCommandException
 from botmodule import BotModules
 
 class MyBot(object):
@@ -37,6 +37,9 @@ class MyBot(object):
         self._modules = BotModules(self._MODULE_PATH)        
 
         self.translator = BotCommandTranslator(self._modules)  
+
+        
+        
         #TODO: add more controller commands
         self._commands = {}
         self.add_command(BotCommand(destination=None,name='shutdown',command='self.shutdown()'))
@@ -192,11 +195,17 @@ class MyBot(object):
                 o.put(str(text)+"\n")
     
     def execute_command(self,command_line):
-        self.log.debug('Translating command line %s' % command_line)
-        command = self.translator.validate(command_line)
+        try:
+            # translate command line into a command
+            command = self.translator.validate_command(command_line)
+        except BotCommandException, e:
+            self.output_text(e.message)
+            return
         if command==True:
+            # just started a conversation
             self.log.debug('Now talking to %s ' % self.translator.get_current_destination())
             return
+        
         if command:
             if not command.destination:
                 # command sent to controller
@@ -214,8 +223,11 @@ class MyBot(object):
                 except Exception,e:
                     self.output_text(str(e))
                     return
-            self.log.debug('Send command to %s ' % command.destination)
-            self._modules.get_instance(command.destination).queue_command(command)
+            destination = command.destination
+            command.destination=None # TODO: BotCommand has to be reviewed to avoid this
+            # if the command object has a reference to a module, the code crashes adding the command to the queue
+            destination.queue_command(command)
+            #command.destination.queue_command(command)
         else:
             self.output_text('Unknown command: %s\n' % command_line)
        
