@@ -120,7 +120,6 @@ class MyBot(object):
             instance = self._modules.get_instance(instance_name)
             if instance:
                 self.output_text('Starting %s ' % instance.name)
-                self.translator.add_commands(destination_name=instance_name, commands=instance.get_commands()) #TODO: add specific commands
                 instance.set_output_queue(self._outputs_queue)
                 instance.check_outputs_subscriber(self._outputs_subscribers)
                 instance.set_output_commands_queue(self._commands_queue)
