@@ -56,7 +56,6 @@ class BotCommand(object):
     def _parse_argument_list(self,arguments):
         #TODO: optional arguments
         w = 0
-        #FIX: empty argument list breaks
         new_arguments = OrderedDict()
         while w < len(arguments):
             if arguments[w] in self._mandatory_arguments.keys():
@@ -116,6 +115,7 @@ class BotCommandTranslator(object):
         self._commands = {}
         self._common_commands = {}
         self._modules = modules
+        self._conversation_timeout_secs=conversation_timeout_secs
 
     def add_command(self,destination_name,command_name):
         '''
