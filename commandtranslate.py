@@ -177,6 +177,17 @@ class BotCommandTranslator(object):
         
         # split into words / individual expressions 
         words = self._parse_command_line(line)
+        
+        #TODO: review this
+        # workaround to end conversation
+        # this is not a final solution and must be reviewed
+        try:
+            if words[0] == '.':
+                self.end_conversation()
+                return True
+        except KeyError:
+            pass
+             
  
         # check if first word is a destination
         w = 0

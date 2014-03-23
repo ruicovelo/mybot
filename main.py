@@ -201,8 +201,11 @@ class MyBot(object):
             self.output_text(e.message)
             return
         if command==True:
-            # just started a conversation
-            self.log.debug('Now talking to %s ' % self.translator.get_current_destination())
+            # just started or ended a conversation
+            try:
+                self.output_text('%s is listening ...' % self.translator.get_current_destination().name)
+            except AttributeError:
+                self.output_text('Bye...')
             return
         
         if command:
