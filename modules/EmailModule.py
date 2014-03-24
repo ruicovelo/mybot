@@ -21,10 +21,6 @@ class EmailModule(BotModule):
     
         self.add_command(name='status',command='self.status()',arguments=[])
         self.add_command(name='send', command='self.send()', arguments=[('to','.+@.+'),('subject','.*'),('body','.*')])
-        #self.add_command(BotCommand(destination=None,name='shutdown',command='self.shutdown()'))
-        #self.add_command(BotCommand(destination=None,name='list',command='self.list_modules()'))
-        #command = BotCommand(destination=None,name='start',command='self.start(arguments)')
-        #command.add_argument('module', '.+')
 
         self.smtp_server_address = parameters['smtp_server']
         self.smtp_username = parameters['username']
