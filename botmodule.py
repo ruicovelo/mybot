@@ -86,6 +86,7 @@ class BotModule(object):
             available_command = self._commands[command.name]
             arguments = available_command.validate(command.arguments)
             if arguments:
+                command.command=available_command.command
                 command.arguments = arguments
                 return command
         except KeyError:
