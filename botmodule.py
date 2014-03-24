@@ -219,11 +219,9 @@ class BotModule(object):
             return s
         
     def _execute(self,command):
-        if command and command.destination==self.name:
-            self.log.debug('Executing command %s' % command)
-            command.command(command.arguments)
-        else:
-            self.output_text('Unknown command: %s' % command)    
+        self.log.debug('Executing %s' % command)
+        exec('result=self.%s(command.arguments)' % command.command)
+        return result
    
 class BotModules(object):
     '''
