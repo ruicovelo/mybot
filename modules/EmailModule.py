@@ -10,13 +10,22 @@ class EmailModule(BotModule):
     '''
     Module for sending email and checking imap gmail mailbox
     '''
-    smtp_server = None
-    smtp_server_address = None
-    smtp_username = None
-    smtp_password = None #TODO: is there a better way to store credentials?
 
     def __init__(self,name='sleeper',parameters={}):
         super(EmailModule,self).__init__(name=name,parameters=parameters)
+    
+        self.smtp_server = None
+        self.smtp_server_address = None
+        self.smtp_username = None
+        self.smtp_password = None #TODO: is there a better way to store credentials?
+    
+        self.add_command(name='status',command='self.status()',arguments=[])
+        self.add_command(name='send', command='self.send()', arguments=[('to','.+@.+'),('subject','.*'),('body','.*')])
+        #self.add_command(BotCommand(destination=None,name='shutdown',command='self.shutdown()'))
+        #self.add_command(BotCommand(destination=None,name='list',command='self.list_modules()'))
+        #command = BotCommand(destination=None,name='start',command='self.start(arguments)')
+        #command.add_argument('module', '.+')
+
         self.smtp_server_address = parameters['smtp_server']
         self.smtp_username = parameters['username']
         self.smtp_password = parameters['password']
@@ -29,16 +38,12 @@ class EmailModule(BotModule):
     def send_email(self,toaddr,subject,body):
         message = email.EmailMessage(fromaddr=self.smtp_username,toaddr=toaddr,subject=subject,body=body)
         self.smtp_server.send_single_email_message(message)
-        
+ 
     def run(self):
         super(EmailModule,self).run()
-        self.send_email('rui.covelo@gmail.com', 'Starting', 'Starting mail module')
         while not self.stopping():
             cmd = self._wait_next_command_available(3.0)
             if cmd:
-                try:
-                    arguments = cmd.arguments
-                    exec(self._commands[cmd.name])
-                except KeyError:
-                    self.log.debug('Unknown command %s ' % cmd.tostring())
+                self.log.debug('Command received:')
+                self.log.debug(cmd)
         self.log.debug('Exiting...')            

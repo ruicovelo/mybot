@@ -20,6 +20,8 @@ import sys
 
 import logging
 
+from commandtranslate import BotCommand,UnknownCommandException
+
 class BotModuleCode(object):
 
     def __init__(self,code,file_path):
@@ -72,6 +74,22 @@ class BotModule(object):
     
     def get_commands(self):
         return self._commands.keys()
+    
+    def add_command(self,name,command,arguments):
+        command = BotCommand(self.name,name,command)
+        for argument in arguments:
+            command.add_argument(argument[0], argument[1])
+        self._commands[name]=command
+    
+    def validate_command(self,command):
+        try:
+            available_command = self._commands[command.name]
+            arguments = available_command.validate(command.arguments)
+            if arguments:
+                command.arguments = arguments
+                return command
+        except KeyError:
+            raise UnknownCommandException(command.name)
     
     def _do_work(self):
         self.log.debug('Not doing the right work...')
@@ -143,7 +161,7 @@ class BotModule(object):
     def running(self):
         return self._run.value
 
-    def add_command(self,command,timeout=None):
+    def queue_command(self,command,timeout=None):
         ''' Add command to the queue of commands to process in order '''
         self.log.debug('Adding command to queue\n %s' % command)
         self._commands_queue.put(obj=command, block=True, timeout=timeout)
