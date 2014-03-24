@@ -168,7 +168,7 @@ class BotCommandTranslator(object):
         
     def validate_command(self, line,origin_name=None):
         '''
-        Parses a command line a creates a corresponding BotCommand instance
+        Does basic command validation and validates command destination.
         '''
         
         # checking if we are in a conversation

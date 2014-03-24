@@ -198,7 +198,6 @@ class MyBot(object):
         try:
             # translate command line into a command
             command = self.translator.validate_command(command_line)
-            print(command)
         except BotCommandException, e:
             self.output_text(e.message)
             return
